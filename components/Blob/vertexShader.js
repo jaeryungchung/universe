@@ -1,6 +1,10 @@
 const vertexShader = `
 uniform float u_intensity;
 uniform float u_time;
+uniform vec2 u_hoverUv;
+uniform float u_hoverStrength;
+uniform float u_hoverActive;
+uniform float u_hoverRadius;
 
 varying vec2 vUv;
 varying float vDisplacement;
@@ -97,8 +101,12 @@ void main() {
     vUv = uv;
 
     vDisplacement = cnoise(position + vec3(2.0 * u_time));
+
+    float hoverDistance = distance(vUv, u_hoverUv);
+    float press = 1.0 - smoothstep(0.0, u_hoverRadius, hoverDistance);
+    press = pow(press, 2.8) * u_hoverStrength * u_hoverActive;
   
-    vec3 newPosition = position + normal * (u_intensity * vDisplacement);
+    vec3 newPosition = position + normal * (u_intensity * vDisplacement - press * 0.52);
     vNormal = normalize(normalMatrix * normal);
     vPosition = (modelMatrix * vec4(newPosition, 1.0)).xyz;
   

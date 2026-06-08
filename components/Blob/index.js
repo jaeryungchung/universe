@@ -2,15 +2,19 @@ import React, { useMemo, useRef } from "react";
 import vertexShader from "./vertexShader";
 import fragmentShader from "./fragmentShader";
 import { useFrame } from "@react-three/fiber";
-import { DoubleSide, MathUtils } from "three";
+import { DoubleSide, MathUtils, Vector2 } from "three";
 
 const Blob = () => {
   const mesh = useRef();
-  const hover = useRef(false);
+  const hover = useRef({ active: false, uv: new Vector2(0.5, 0.5) });
   const uniforms = useMemo(() => {
     return {
       u_time: { value: 0 },
-      u_intensity: { value: 0.22 },
+      u_intensity: { value: 0.18 },
+      u_hoverUv: { value: new Vector2(0.5, 0.5) },
+      u_hoverStrength: { value: 0.0 },
+      u_hoverActive: { value: 0.0 },
+      u_hoverRadius: { value: 0.24 },
     };
   }, []);
 
@@ -18,12 +22,20 @@ const Blob = () => {
     const { clock } = state;
     if (mesh.current) {
       mesh.current.material.uniforms.u_time.value =
-        0.18 * clock.getElapsedTime();
+        (hover.current.active ? 0.12 : 0.01) * clock.getElapsedTime();
+
+      mesh.current.material.uniforms.u_hoverUv.value.copy(hover.current.uv);
+      mesh.current.material.uniforms.u_hoverActive.value = hover.current.active
+        ? 1.0
+        : 0.0;
+      mesh.current.material.uniforms.u_hoverStrength.value = hover.current.active
+        ? 1.0
+        : 0.0;
 
       mesh.current.material.uniforms.u_intensity.value = MathUtils.lerp(
         mesh.current.material.uniforms.u_intensity.value,
-        hover.current ? 0.7 : 0.08,
-        0.008
+        hover.current.active ? 0.42 : 0.02,
+        hover.current.active ? 0.035 : 0.22
       );
     }
   });
@@ -32,8 +44,21 @@ const Blob = () => {
       ref={mesh}
       scale={1.5}
       position={[0, 0, 0]}
-      onPointerOver={() => (hover.current = true)}
-      onPointerOut={() => (hover.current = false)}
+      onPointerOver={(event) => {
+        hover.current.active = true;
+        if (event.uv) {
+          hover.current.uv.set(event.uv.x, event.uv.y);
+        }
+      }}
+      onPointerMove={(event) => {
+        hover.current.active = true;
+        if (event.uv) {
+          hover.current.uv.set(event.uv.x, event.uv.y);
+        }
+      }}
+      onPointerOut={() => {
+        hover.current.active = false;
+      }}
     >
       <icosahedronBufferGeometry args={[2, 20]} />
       <shaderMaterial
