@@ -17,5 +17,17 @@
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "three": "^0.147.0"
-  }
+  },
+  "description": "Preview -",
+  "main": "next.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chetanverma16/react-three-fiber-blob.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/chetanverma16/react-three-fiber-blob/issues"
+  },
+  "homepage": "https://github.com/chetanverma16/react-three-fiber-blob#readme"
 }
