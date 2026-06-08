@@ -2,7 +2,7 @@ import React, { useMemo, useRef } from "react";
 import vertexShader from "./vertexShader";
 import fragmentShader from "./fragmentShader";
 import { useFrame } from "@react-three/fiber";
-import { MathUtils } from "three";
+import { DoubleSide, MathUtils } from "three";
 
 const Blob = () => {
   const mesh = useRef();
@@ -10,20 +10,20 @@ const Blob = () => {
   const uniforms = useMemo(() => {
     return {
       u_time: { value: 0 },
-      u_intensity: { value: 0.3 },
+      u_intensity: { value: 0.22 },
     };
-  });
+  }, []);
 
   useFrame((state) => {
     const { clock } = state;
     if (mesh.current) {
       mesh.current.material.uniforms.u_time.value =
-        0.4 * clock.getElapsedTime();
+        0.18 * clock.getElapsedTime();
 
       mesh.current.material.uniforms.u_intensity.value = MathUtils.lerp(
         mesh.current.material.uniforms.u_intensity.value,
-        hover.current ? 1 : 0.15,
-        0.02
+        hover.current ? 0.7 : 0.08,
+        0.008
       );
     }
   });
@@ -40,6 +40,9 @@ const Blob = () => {
         vertexShader={vertexShader}
         fragmentShader={fragmentShader}
         uniforms={uniforms}
+        transparent
+        depthWrite={false}
+        side={DoubleSide}
       />
     </mesh>
   );
