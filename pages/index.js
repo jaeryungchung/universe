@@ -102,7 +102,8 @@ export default function Home({ encouragementLines, tutorialLines }) {
   const audioRef = useRef(null);
   const playerRef = useRef(null);
   const playerCloseTimeoutRef = useRef(null);
-  const latestPointerRef = useRef({ x: 0, y: 0 });
+  const latestPointerRef = useRef({ x: 0, y: 0, t: 0 });
+  const blobCursorPatTimeoutRef = useRef(null);
   const lastNoteColorRef = useRef(null);
   const [draft, setDraft] = useState(null);
   const [notes, setNotes] = useState([]);
@@ -129,6 +130,12 @@ export default function Home({ encouragementLines, tutorialLines }) {
     x: 0,
     y: 0,
   });
+  const [blobHoverCursor, setBlobHoverCursor] = useState(false);
+  const [blobCursorPointer, setBlobCursorPointer] = useState({
+    x: 0,
+    y: 0,
+  });
+  const [blobCursorPatting, setBlobCursorPatting] = useState(false);
   const [activeTrackId, setActiveTrackId] = useState(TRACKS[0].id);
   const [isMuted, setIsMuted] = useState(true);
   const [volume, setVolume] = useState(0.45);
@@ -216,7 +223,30 @@ export default function Home({ encouragementLines, tutorialLines }) {
 
   useEffect(() => {
     const handlePointerMove = (event) => {
-      latestPointerRef.current = { x: event.clientX, y: event.clientY };
+      const now = performance.now();
+      const previous = latestPointerRef.current;
+      const deltaX = event.clientX - previous.x;
+      const deltaY = event.clientY - previous.y;
+      const deltaT = Math.max(16, now - (previous.t || now));
+      const speed = Math.hypot(deltaX, deltaY) / deltaT;
+
+      latestPointerRef.current = { x: event.clientX, y: event.clientY, t: now };
+
+      if (blobHoverCursor) {
+        setBlobCursorPointer({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        if (speed > 0.55) {
+          setBlobCursorPatting(true);
+          if (blobCursorPatTimeoutRef.current) {
+            window.clearTimeout(blobCursorPatTimeoutRef.current);
+          }
+          blobCursorPatTimeoutRef.current = window.setTimeout(() => {
+            setBlobCursorPatting(false);
+          }, 220);
+        }
+      }
       if (encouragementBubble) {
         setEncouragementPointer({
           x: event.clientX,
@@ -227,7 +257,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
 
     window.addEventListener("pointermove", handlePointerMove);
     return () => window.removeEventListener("pointermove", handlePointerMove);
-  }, [encouragementBubble]);
+  }, [blobHoverCursor, encouragementBubble]);
 
   useEffect(() => {
     if (!encouragementBubble) {
@@ -246,6 +276,9 @@ export default function Home({ encouragementLines, tutorialLines }) {
     return () => {
       if (playerCloseTimeoutRef.current) {
         window.clearTimeout(playerCloseTimeoutRef.current);
+      }
+      if (blobCursorPatTimeoutRef.current) {
+        window.clearTimeout(blobCursorPatTimeoutRef.current);
       }
     };
   }, []);
@@ -556,7 +589,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
     <div
       className={`container${cosmicShock ? " cosmicShockActive" : ""}${
         encouragementBubble ? " heartCursor" : ""
-      }`}
+      }${blobHoverCursor ? " blobHoverCursor" : ""}`}
     >
       <audio
         ref={audioRef}
@@ -576,6 +609,12 @@ export default function Home({ encouragementLines, tutorialLines }) {
           tint={blobState.tint}
           absorbRadius={ABSORB_RADIUS}
           onClick={handleBlobClick}
+          onHoverChange={(isHovering) => {
+            setBlobHoverCursor(isHovering);
+            if (isHovering) {
+              setBlobCursorPointer(latestPointerRef.current);
+            }
+          }}
           burstSignal={blobBurst.key}
           burstColor={blobBurst.color}
           bounceSignal={blobMotion.bounceKey}
@@ -595,6 +634,21 @@ export default function Home({ encouragementLines, tutorialLines }) {
             "--shock-deep": cosmicShock.deep,
           }}
         />
+      ) : null}
+      {blobHoverCursor && !encouragementBubble ? (
+        <div
+          className={`blobHoverPointer${
+            blobCursorPatting ? " blobHoverPointerPatting" : ""
+          }`}
+          aria-hidden="true"
+          style={{
+            left: blobCursorPointer.x,
+            top: blobCursorPointer.y,
+          }}
+        >
+          <span className="blobHoverPointerMain">👋</span>
+          <span className="blobHoverPointerGlow" />
+        </div>
       ) : null}
       {encouragementBubble ? (
         <div
@@ -749,7 +803,6 @@ export default function Home({ encouragementLines, tutorialLines }) {
               attemptPlayAudio();
             }}
           >
-            <span className="playerCaption">Now playing</span>
             <span className="playerTrackName">{activeTrack.label}</span>
             <span className="playerChevron">{isTrackMenuOpen ? "−" : "+"}</span>
           </button>
@@ -787,12 +840,12 @@ export default function Home({ encouragementLines, tutorialLines }) {
               {isMuted ? "Unmute" : "Mute"}
             </button>
             <input
-              className="volumeSlider"
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={volume}
+            className="volumeSlider"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={volume}
               onChange={(event) => {
                 keepPlayerOpen();
                 setVolume(Number(event.target.value));

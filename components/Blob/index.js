@@ -10,6 +10,7 @@ const Blob = ({
   tint = "#f2efe7",
   absorbRadius = 112,
   onClick,
+  onHoverChange,
   burstSignal = 0,
   burstColor = "#f2efe7",
   bounceSignal = 0,
@@ -199,18 +200,21 @@ const Blob = ({
         position={[0, 0, 0]}
         onPointerOver={(event) => {
           hover.current.mode = "inside";
+          onHoverChange?.(true);
           if (event.uv) {
             hover.current.uv.set(event.uv.x, event.uv.y);
           }
         }}
         onPointerMove={(event) => {
           hover.current.mode = "inside";
+          onHoverChange?.(true);
           if (event.uv) {
             hover.current.uv.set(event.uv.x, event.uv.y);
           }
         }}
         onPointerOut={() => {
           hover.current.mode = "idle";
+          onHoverChange?.(false);
         }}
         onClick={(event) => {
           event.stopPropagation();
