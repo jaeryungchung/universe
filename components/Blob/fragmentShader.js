@@ -1,6 +1,8 @@
 const fragmentShader = `
 uniform float u_intensity;
 uniform float u_time;
+uniform vec3 u_tintColor;
+uniform float u_tintStrength;
 
 varying vec2 vUv;
 varying float vDisplacement;
@@ -16,7 +18,8 @@ void main() {
 
     vec3 milkyWhite = vec3(0.985, 0.975, 0.965);
     vec3 warmTint = vec3(0.975, 0.94, 0.86);
-    vec3 color = mix(milkyWhite, warmTint, 0.05 + 0.03 * sin(u_time + vUv.x * 2.0));
+    vec3 baseColor = mix(milkyWhite, warmTint, 0.05 + 0.03 * sin(u_time + vUv.x * 2.0));
+    vec3 color = mix(baseColor, u_tintColor, u_tintStrength * (0.55 + innerGlow * 0.25));
     color = mix(color * 0.8, vec3(1.0), fresnel * 0.35);
     color += vec3(0.045, 0.04, 0.02) * innerGlow * (1.0 - distort * 0.18);
 

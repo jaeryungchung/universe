@@ -1,31 +1,183 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Nanum+Pen+Script&family=Montserrat:wght@600;700&display=swap");
+
+html,
+body,
+#__next {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, rgba(255, 244, 210, 0.85), transparent 32%),
+    radial-gradient(circle at 25% 25%, rgba(255, 204, 227, 0.55), transparent 22%),
+    radial-gradient(circle at 75% 18%, rgba(176, 223, 255, 0.46), transparent 24%),
+    linear-gradient(180deg, #ded6cb 0%, #b8afa5 100%);
+  font-family: "Montserrat", sans-serif;
+}
 
 .container {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 100vh;
   width: 100vw;
+  height: 100vh;
   overflow: hidden;
-  font-family: "Montserrat", sans-serif;
-  
+  cursor: text;
 }
 
 canvas {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: -1;
-  height: 100vh;
-  width: 100vw;
-  background-color: #b1b1b1;
-}
-
-h1{
   position: absolute;
-  font-size: 3rem;
-  font-weight: 700;
+  inset: 0;
 }
 
+.sceneGlow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at center, rgba(255, 250, 238, 0.36), transparent 22%),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.12), transparent 48%);
+  pointer-events: none;
+}
 
+.blobTargetRing {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 224px;
+  height: 224px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 60px rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+.floatingInput {
+  position: fixed;
+  width: 196px;
+  min-height: 138px;
+  padding: 16px 18px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: rgba(76, 56, 39, 0.98);
+  caret-color: #ffffff;
+  font-family: "Nanum Pen Script", "Marker Felt", cursive;
+  font-size: 24px;
+  line-height: 1.12;
+  letter-spacing: 0.01em;
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  z-index: 25;
+}
+
+.absorbLayer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.absorbNoteGhost {
+  position: fixed;
+  width: 196px;
+  min-height: 138px;
+  padding: 18px 20px 26px 18px;
+  border-radius: 4px;
+  font-family: "Nanum Pen Script", "Marker Felt", cursive;
+  font-size: 24px;
+  line-height: 1.12;
+  letter-spacing: 0.01em;
+  box-shadow: 0 18px 38px rgba(36, 27, 20, 0.18);
+  animation: absorbNote 0.9s cubic-bezier(0.2, 0.9, 0.35, 1) forwards;
+  pointer-events: none;
+  z-index: 22;
+}
+
+.absorbNoteText {
+  max-width: 10ch;
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.absorbGhostFold {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.22);
+  clip-path: polygon(100% 0, 0 100%, 100% 100%);
+}
+
+.absorbGhostShadow {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 34px;
+  height: 34px;
+  background: var(--fold-color);
+  clip-path: polygon(100% 0, 0 100%, 100% 100%);
+}
+
+.orbitText {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  font-family: "Nanum Pen Script", "Marker Felt", cursive;
+  font-size: 28px;
+  line-height: 1;
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.28);
+  animation: textOrbit 2.6s ease-out forwards;
+  transform-origin: 0 0;
+}
+
+.orbitText span {
+  display: block;
+  max-width: 9ch;
+  overflow-wrap: anywhere;
+}
+
+@keyframes textOrbit {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+  20% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0deg) translateX(38px) scale(1);
+  }
+  78% {
+    opacity: 0.9;
+    transform: translate(-50%, -50%) rotate(310deg) translateX(72px) scale(0.56);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(420deg) translateX(8px) scale(0.2);
+  }
+}
+
+@keyframes absorbNote {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  65% {
+    opacity: 0.95;
+    transform: translate3d(calc(50vw - 98px), calc(50vh - 69px), 0) rotate(-11deg)
+      scale(0.28);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(calc(50vw - 98px), calc(50vh - 69px), 0) rotate(-24deg)
+      scale(0.08);
+  }
+}

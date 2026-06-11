@@ -1,0 +1,109 @@
+.stickyNote {
+  position: fixed;
+  width: 196px;
+  min-height: 138px;
+  padding: 18px 20px 26px 18px;
+  border-radius: 4px;
+  box-shadow: 0 18px 38px rgba(36, 27, 20, 0.18);
+  font-family: "Nanum Pen Script", "Marker Felt", cursive;
+  font-size: 24px;
+  line-height: 1.12;
+  letter-spacing: 0.01em;
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  z-index: 30;
+  user-select: none;
+  touch-action: none;
+  transform-origin: center;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.dragging {
+  transform: rotate(-2deg) scale(1.02);
+  box-shadow: 0 24px 42px rgba(36, 27, 20, 0.24);
+}
+
+.pink {
+  background: #f7b7cb;
+  color: #734257;
+}
+
+.yellow {
+  background: #f5e58a;
+  color: #77641d;
+}
+
+.blue {
+  background: #a9d7f6;
+  color: #36566d;
+}
+
+.green {
+  background: #b8e3b0;
+  color: #436549;
+}
+
+.textContent {
+  position: relative;
+  z-index: 2;
+  max-width: 10ch;
+}
+
+.fold {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.22);
+  clip-path: polygon(100% 0, 0 100%, 100% 100%);
+  z-index: 1;
+}
+
+.shadow {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 34px;
+  height: 34px;
+  clip-path: polygon(100% 0, 0 100%, 100% 100%);
+  z-index: 0;
+}
+
+.pink .shadow {
+  background: #eb99b4;
+}
+
+.yellow .shadow {
+  background: #e2cc62;
+}
+
+.blue .shadow {
+  background: #80b6db;
+}
+
+.green .shadow {
+  background: #91c28b;
+}
+
+.closeBtn {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 3;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 22px;
+  line-height: 1;
+  opacity: 0.35;
+  cursor: pointer;
+}
+
+.closeBtn:hover {
+  opacity: 0.7;
+}
