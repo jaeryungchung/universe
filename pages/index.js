@@ -1,7 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import fs from "fs";
+import path from "path";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import Blob from "../components/Blob";
 import StickyNote from "../components/StickyNote";
+import universeTrack from "../src/music/universe.mp3";
+import forestTrack from "../src/music/forest.mp3";
+import relaxTrack from "../src/music/relax.mp3";
+import mistyTrack from "../src/music/misty.mp3";
+import pianoTrack from "../src/music/piano.mp3";
 
 const NOTE_COLORS = [
   { name: "pink", fill: "#f7b7cb", fold: "#eb99b4", deep: "#bb4d7d" },
@@ -10,12 +17,21 @@ const NOTE_COLORS = [
   { name: "green", fill: "#b8e3b0", fold: "#91c28b", deep: "#4e8755" },
 ];
 
+const TRACKS = [
+  { id: "universe", label: "Universe", src: universeTrack },
+  { id: "forest", label: "Forest", src: forestTrack },
+  { id: "relax", label: "Relax", src: relaxTrack },
+  { id: "misty", label: "Misty", src: mistyTrack },
+  { id: "piano", label: "Piano", src: pianoTrack },
+];
+
 const INPUT_WIDTH = 196;
 const INPUT_HEIGHT = 138;
 const ABSORB_RADIUS = 172;
 const BLOB_BASE_TINT = "#f2efe7";
 const FADE_STEPS = [0, 0.45, 0.72, 1];
 const SHOCK_TEXT_LENGTH = 15;
+const ENCOURAGEMENT_TRIGGER = 10;
 
 function clampNotePosition(x, y, width, height) {
   if (typeof window === "undefined") {
@@ -34,6 +50,10 @@ function wrapPreviewText(value) {
 
 function countMeaningfulChars(value) {
   return value.replace(/\s/g, "").length;
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
 function mixHexWithWhite(hex, amount) {
@@ -69,8 +89,10 @@ function createBurstParticles(color, count, minRadius, maxRadius) {
   });
 }
 
-export default function Home() {
+export default function Home({ encouragementLines, tutorialLines }) {
   const textareaRef = useRef(null);
+  const audioRef = useRef(null);
+  const playerRef = useRef(null);
   const [draft, setDraft] = useState(null);
   const [notes, setNotes] = useState([]);
   const [absorbingNotes, setAbsorbingNotes] = useState([]);
@@ -90,6 +112,20 @@ export default function Home() {
     step: 3,
     tint: BLOB_BASE_TINT,
   });
+  const [blobClickStreak, setBlobClickStreak] = useState(0);
+  const [encouragementBubble, setEncouragementBubble] = useState(null);
+  const [activeTrackId, setActiveTrackId] = useState(TRACKS[0].id);
+  const [isMuted, setIsMuted] = useState(false);
+  const [volume, setVolume] = useState(0.45);
+  const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
+  const [hasStartedAudio, setHasStartedAudio] = useState(false);
+
+  const activeTrack = useMemo(
+    () => TRACKS.find((track) => track.id === activeTrackId) || TRACKS[0],
+    [activeTrackId]
+  );
+
+  const tutorialText = tutorialLines.join(" ");
 
   useEffect(() => {
     if (draft && textareaRef.current) {
@@ -129,6 +165,68 @@ export default function Home() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    audio.volume = volume;
+  }, [volume]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    audio.muted = isMuted;
+  }, [isMuted]);
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (!playerRef.current?.contains(event.target)) {
+        setIsTrackMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => window.removeEventListener("pointerdown", handlePointerDown);
+  }, []);
+
+  useEffect(() => {
+    if (!encouragementBubble) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setEncouragementBubble(null);
+    }, 4200);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [encouragementBubble]);
+
+  useEffect(() => {
+    attemptPlayAudio();
+  }, []);
+
+  const resetBlobClickStreak = () => {
+    setBlobClickStreak(0);
+  };
+
+  const attemptPlayAudio = () => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    const playPromise = audio.play();
+    if (playPromise?.catch) {
+      playPromise.catch(() => {});
+    }
+    setHasStartedAudio(true);
+  };
+
   const completeDraft = () => {
     if (!draft) {
       return;
@@ -137,6 +235,7 @@ export default function Home() {
     const text = draft.text.trim();
     if (!text) {
       setDraft(null);
+      resetBlobClickStreak();
       return;
     }
 
@@ -157,6 +256,7 @@ export default function Home() {
       },
     ]);
     setDraft(null);
+    resetBlobClickStreak();
   };
 
   const startDraftAtPoint = (clientX, clientY) => {
@@ -168,6 +268,7 @@ export default function Home() {
       y: clamped.y,
       text: "",
     });
+    resetBlobClickStreak();
   };
 
   const handleDraftKeyDown = (event) => {
@@ -178,6 +279,7 @@ export default function Home() {
 
     if (event.key === "Escape") {
       setDraft(null);
+      resetBlobClickStreak();
     }
   };
 
@@ -192,6 +294,10 @@ export default function Home() {
       typeof window === "undefined" ? 0 : Math.round(window.innerHeight / 2);
     const originX = note.x + INPUT_WIDTH / 2;
     const originY = note.y + INPUT_HEIGHT / 2;
+    const deltaX = centerX - originX;
+    const deltaY = centerY - originY;
+    const curveX = clamp(-deltaY * 0.18, -140, 140);
+    const curveY = clamp(deltaX * 0.18, -140, 140);
     const isLongText = countMeaningfulChars(note.text) >= SHOCK_TEXT_LENGTH;
 
     setNotes((current) => current.filter((item) => item.id !== note.id));
@@ -204,6 +310,8 @@ export default function Home() {
       key: current.key + 1,
       color: note.fill,
     }));
+    resetBlobClickStreak();
+
     if (isLongText) {
       setBlobMotion((current) => ({
         ...current,
@@ -244,8 +352,10 @@ export default function Home() {
         color: note.deep,
         originX,
         originY,
-        deltaX: centerX - originX,
-        deltaY: centerY - originY,
+        deltaX,
+        deltaY,
+        curveX,
+        curveY,
       },
     ]);
     setTextBursts((current) => [
@@ -272,6 +382,23 @@ export default function Home() {
   };
 
   const handleBlobClick = () => {
+    attemptPlayAudio();
+
+    const nextStreak = blobClickStreak + 1;
+    setBlobClickStreak(nextStreak);
+
+    if (nextStreak >= ENCOURAGEMENT_TRIGGER && encouragementLines.length > 0) {
+      const randomLine =
+        encouragementLines[
+          Math.floor(Math.random() * encouragementLines.length)
+        ];
+      setEncouragementBubble({
+        id: `enc-${Date.now()}`,
+        text: randomLine,
+      });
+      setBlobClickStreak(0);
+    }
+
     const shouldBounce = blobState.step >= 2;
 
     setBlobState((current) => {
@@ -331,11 +458,30 @@ export default function Home() {
 
     if (noteToAbsorb) {
       absorbNote(noteToAbsorb);
+    } else {
+      resetBlobClickStreak();
     }
+  };
+
+  const handleTrackChange = (trackId) => {
+    setActiveTrackId(trackId);
+    setIsTrackMenuOpen(false);
+    window.setTimeout(() => {
+      attemptPlayAudio();
+    }, 0);
   };
 
   return (
     <div className={`container${cosmicShock ? " cosmicShockActive" : ""}`}>
+      <audio
+        ref={audioRef}
+        src={activeTrack.src}
+        loop
+        preload="auto"
+        muted={isMuted}
+        autoPlay
+      />
+
       <Canvas
         camera={{ position: [0, 0, 8] }}
         onPointerMissed={(event) => startDraftAtPoint(event.clientX, event.clientY)}
@@ -363,6 +509,11 @@ export default function Home() {
             "--shock-deep": cosmicShock.deep,
           }}
         />
+      ) : null}
+      {encouragementBubble ? (
+        <div className="encouragementBubble" aria-live="polite">
+          {encouragementBubble.text}
+        </div>
       ) : null}
 
       {draft ? (
@@ -394,9 +545,10 @@ export default function Home() {
           key={note.id}
           {...note}
           onDrop={handleNoteDrop}
-          onRemove={(id) =>
-            setNotes((current) => current.filter((noteItem) => noteItem.id !== id))
-          }
+          onRemove={(id) => {
+            setNotes((current) => current.filter((noteItem) => noteItem.id !== id));
+            resetBlobClickStreak();
+          }}
         />
       ))}
 
@@ -455,12 +607,103 @@ export default function Home() {
               color: item.color,
               "--orbit-dx": `${item.deltaX}px`,
               "--orbit-dy": `${item.deltaY}px`,
+              "--orbit-curve-x": `${item.curveX}px`,
+              "--orbit-curve-y": `${item.curveY}px`,
             }}
           >
             <span>{item.text}</span>
           </div>
         ))}
       </div>
+
+      <div className="helpDock">
+        <button type="button" className="helpButton" aria-label="Help">
+          ?
+        </button>
+        <div className="helpTooltip">{tutorialText}</div>
+      </div>
+
+      <div ref={playerRef} className="musicPlayer">
+        <button
+          type="button"
+          className="trackSelectButton"
+          onClick={() => {
+            setIsTrackMenuOpen((current) => !current);
+            attemptPlayAudio();
+          }}
+        >
+          <span className="playerCaption">Now playing</span>
+          <span className="playerTrackName">{activeTrack.label}</span>
+          <span className="playerChevron">{isTrackMenuOpen ? "−" : "+"}</span>
+        </button>
+
+        {isTrackMenuOpen ? (
+          <div className="trackMenu">
+            {TRACKS.map((track) => (
+              <button
+                key={track.id}
+                type="button"
+                className={`trackOption${
+                  track.id === activeTrackId ? " activeTrackOption" : ""
+                }`}
+                onClick={() => handleTrackChange(track.id)}
+              >
+                {track.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="playerControls">
+          <button
+            type="button"
+            className="muteButton"
+            onClick={() => {
+              setIsMuted((current) => !current);
+              attemptPlayAudio();
+            }}
+          >
+            {isMuted ? "Unmute" : "Mute"}
+          </button>
+          <input
+            className="volumeSlider"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={volume}
+            onChange={(event) => {
+              setVolume(Number(event.target.value));
+              attemptPlayAudio();
+            }}
+            aria-label="Volume"
+          />
+          <span className="volumeValue">
+            {hasStartedAudio ? `${Math.round(volume * 100)}%` : "Tap to play"}
+          </span>
+        </div>
+      </div>
     </div>
   );
+}
+
+export async function getStaticProps() {
+  const encouragementPath = path.join(process.cwd(), "src", "encouragement.md");
+  const tutorialPath = path.join(process.cwd(), "src", "tutorial.md");
+
+  const encouragementContent = fs.readFileSync(encouragementPath, "utf8");
+  const tutorialContent = fs.readFileSync(tutorialPath, "utf8");
+
+  return {
+    props: {
+      encouragementLines: encouragementContent
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+      tutorialLines: tutorialContent
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+    },
+  };
 }
