@@ -93,6 +93,8 @@ export default function Home({ encouragementLines, tutorialLines }) {
   const textareaRef = useRef(null);
   const audioRef = useRef(null);
   const playerRef = useRef(null);
+  const playerCloseTimeoutRef = useRef(null);
+  const latestPointerRef = useRef({ x: 0, y: 0 });
   const [draft, setDraft] = useState(null);
   const [notes, setNotes] = useState([]);
   const [absorbingNotes, setAbsorbingNotes] = useState([]);
@@ -114,11 +116,17 @@ export default function Home({ encouragementLines, tutorialLines }) {
   });
   const [blobClickStreak, setBlobClickStreak] = useState(0);
   const [encouragementBubble, setEncouragementBubble] = useState(null);
+  const [encouragementPointer, setEncouragementPointer] = useState({
+    x: 0,
+    y: 0,
+  });
   const [activeTrackId, setActiveTrackId] = useState(TRACKS[0].id);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(0.45);
   const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
+  const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   const [hasStartedAudio, setHasStartedAudio] = useState(false);
+  const [audioBootMuted, setAudioBootMuted] = useState(true);
 
   const activeTrack = useMemo(
     () => TRACKS.find((track) => track.id === activeTrackId) || TRACKS[0],
@@ -180,8 +188,8 @@ export default function Home({ encouragementLines, tutorialLines }) {
       return;
     }
 
-    audio.muted = isMuted;
-  }, [isMuted]);
+    audio.muted = isMuted || audioBootMuted;
+  }, [audioBootMuted, isMuted]);
 
   useEffect(() => {
     const handlePointerDown = (event) => {
@@ -193,6 +201,21 @@ export default function Home({ encouragementLines, tutorialLines }) {
     window.addEventListener("pointerdown", handlePointerDown);
     return () => window.removeEventListener("pointerdown", handlePointerDown);
   }, []);
+
+  useEffect(() => {
+    const handlePointerMove = (event) => {
+      latestPointerRef.current = { x: event.clientX, y: event.clientY };
+      if (encouragementBubble) {
+        setEncouragementPointer({
+          x: event.clientX,
+          y: event.clientY,
+        });
+      }
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    return () => window.removeEventListener("pointermove", handlePointerMove);
+  }, [encouragementBubble]);
 
   useEffect(() => {
     if (!encouragementBubble) {
@@ -207,24 +230,66 @@ export default function Home({ encouragementLines, tutorialLines }) {
   }, [encouragementBubble]);
 
   useEffect(() => {
-    attemptPlayAudio();
+    attemptPlayAudio({ forceMutedBoot: true });
+    return () => {
+      if (playerCloseTimeoutRef.current) {
+        window.clearTimeout(playerCloseTimeoutRef.current);
+      }
+    };
   }, []);
 
   const resetBlobClickStreak = () => {
     setBlobClickStreak(0);
   };
 
-  const attemptPlayAudio = () => {
+  const attemptPlayAudio = ({ forceMutedBoot = false } = {}) => {
     const audio = audioRef.current;
     if (!audio) {
       return;
     }
 
+    if (forceMutedBoot) {
+      audio.muted = true;
+    }
+
     const playPromise = audio.play();
     if (playPromise?.catch) {
-      playPromise.catch(() => {});
+      playPromise
+        .then(() => {
+          setHasStartedAudio(true);
+          if (forceMutedBoot) {
+            window.setTimeout(() => {
+              setAudioBootMuted(false);
+            }, 320);
+          }
+        })
+        .catch(() => {});
+      return;
     }
     setHasStartedAudio(true);
+    if (forceMutedBoot) {
+      window.setTimeout(() => {
+        setAudioBootMuted(false);
+      }, 320);
+    }
+  };
+
+  const schedulePlayerClose = () => {
+    if (playerCloseTimeoutRef.current) {
+      window.clearTimeout(playerCloseTimeoutRef.current);
+    }
+
+    playerCloseTimeoutRef.current = window.setTimeout(() => {
+      setIsPlayerOpen(false);
+      setIsTrackMenuOpen(false);
+    }, 3000);
+  };
+
+  const keepPlayerOpen = () => {
+    if (playerCloseTimeoutRef.current) {
+      window.clearTimeout(playerCloseTimeoutRef.current);
+    }
+    setIsPlayerOpen(true);
   };
 
   const completeDraft = () => {
@@ -396,6 +461,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
         id: `enc-${Date.now()}`,
         text: randomLine,
       });
+      setEncouragementPointer(latestPointerRef.current);
       setBlobClickStreak(0);
     }
 
@@ -472,14 +538,19 @@ export default function Home({ encouragementLines, tutorialLines }) {
   };
 
   return (
-    <div className={`container${cosmicShock ? " cosmicShockActive" : ""}`}>
+    <div
+      className={`container${cosmicShock ? " cosmicShockActive" : ""}${
+        encouragementBubble ? " heartCursor" : ""
+      }`}
+    >
       <audio
         ref={audioRef}
         src={activeTrack.src}
         loop
         preload="auto"
-        muted={isMuted}
+        muted={isMuted || audioBootMuted}
         autoPlay
+        playsInline
       />
 
       <Canvas
@@ -511,7 +582,14 @@ export default function Home({ encouragementLines, tutorialLines }) {
         />
       ) : null}
       {encouragementBubble ? (
-        <div className="encouragementBubble" aria-live="polite">
+        <div
+          className="encouragementBubble attachedBubble"
+          aria-live="polite"
+          style={{
+            left: encouragementPointer.x,
+            top: encouragementPointer.y,
+          }}
+        >
           {encouragementBubble.text}
         </div>
       ) : null}
@@ -623,64 +701,95 @@ export default function Home({ encouragementLines, tutorialLines }) {
         <div className="helpTooltip">{tutorialText}</div>
       </div>
 
-      <div ref={playerRef} className="musicPlayer">
+      <div
+        ref={playerRef}
+        className={`musicDock${isPlayerOpen ? " musicDockOpen" : ""}`}
+        onMouseEnter={keepPlayerOpen}
+        onMouseLeave={schedulePlayerClose}
+      >
         <button
           type="button"
-          className="trackSelectButton"
+          className="musicDockButton"
+          onMouseEnter={() => {
+            keepPlayerOpen();
+            attemptPlayAudio({ forceMutedBoot: true });
+          }}
           onClick={() => {
-            setIsTrackMenuOpen((current) => !current);
+            keepPlayerOpen();
             attemptPlayAudio();
           }}
+          aria-label="Music player"
         >
-          <span className="playerCaption">Now playing</span>
-          <span className="playerTrackName">{activeTrack.label}</span>
-          <span className="playerChevron">{isTrackMenuOpen ? "−" : "+"}</span>
+          ♫
         </button>
 
-        {isTrackMenuOpen ? (
-          <div className="trackMenu">
-            {TRACKS.map((track) => (
-              <button
-                key={track.id}
-                type="button"
-                className={`trackOption${
-                  track.id === activeTrackId ? " activeTrackOption" : ""
-                }`}
-                onClick={() => handleTrackChange(track.id)}
-              >
-                {track.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="playerControls">
+        <div className="musicPlayer">
           <button
             type="button"
-            className="muteButton"
+            className="trackSelectButton"
             onClick={() => {
-              setIsMuted((current) => !current);
+              keepPlayerOpen();
+              setIsTrackMenuOpen((current) => !current);
               attemptPlayAudio();
             }}
           >
-            {isMuted ? "Unmute" : "Mute"}
+            <span className="playerCaption">Now playing</span>
+            <span className="playerTrackName">{activeTrack.label}</span>
+            <span className="playerChevron">{isTrackMenuOpen ? "−" : "+"}</span>
           </button>
-          <input
-            className="volumeSlider"
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={(event) => {
-              setVolume(Number(event.target.value));
-              attemptPlayAudio();
-            }}
-            aria-label="Volume"
-          />
-          <span className="volumeValue">
-            {hasStartedAudio ? `${Math.round(volume * 100)}%` : "Tap to play"}
-          </span>
+
+          {isTrackMenuOpen ? (
+            <div className="trackMenu">
+              {TRACKS.map((track) => (
+                <button
+                  key={track.id}
+                  type="button"
+                  className={`trackOption${
+                    track.id === activeTrackId ? " activeTrackOption" : ""
+                  }`}
+                  onClick={() => {
+                    keepPlayerOpen();
+                    handleTrackChange(track.id);
+                  }}
+                >
+                  {track.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="playerControls">
+            <button
+              type="button"
+              className="muteButton"
+              onClick={() => {
+                keepPlayerOpen();
+                setAudioBootMuted(false);
+                setIsMuted((current) => !current);
+                attemptPlayAudio();
+              }}
+            >
+              {isMuted ? "Unmute" : "Mute"}
+            </button>
+            <input
+              className="volumeSlider"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={volume}
+              onChange={(event) => {
+                keepPlayerOpen();
+                setAudioBootMuted(false);
+                setVolume(Number(event.target.value));
+                attemptPlayAudio();
+              }}
+              aria-label="Volume"
+            />
+            <span className="volumeValue">
+              {hasStartedAudio ? `${Math.round(volume * 100)}%` : "Starting"}
+            </span>
+          </div>
         </div>
       </div>
     </div>

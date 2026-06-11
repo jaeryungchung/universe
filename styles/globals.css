@@ -31,6 +31,14 @@ body {
   cursor: text;
 }
 
+.container.heartCursor,
+.container.heartCursor * {
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath fill='%23ff77ad' d='M16 28s-9.5-5.98-13.14-11.22C.4 13.2 1.3 7.86 5.92 5.84c3.22-1.4 6.04-.16 7.95 2.14 1.92-2.3 4.74-3.54 7.96-2.14 4.6 2.02 5.52 7.36 3.06 10.94C25.5 22.02 16 28 16 28z'/%3E%3Cpath fill='%23fff1f6' opacity='.75' d='M16 12.2c1.6-2.55 4.2-4.08 6.48-3.1 3.18 1.38 3.64 5.24 1.9 7.76-2.3 3.34-8.38 7.8-8.38 7.8s-6.08-4.46-8.38-7.8c-1.75-2.52-1.28-6.38 1.9-7.76 2.28-.98 4.88.55 6.48 3.1z'/%3E%3C/svg%3E")
+      12 10,
+    auto !important;
+}
+
 .container.cosmicShockActive {
   animation: cosmicShake 1.05s cubic-bezier(0.22, 0.7, 0.2, 1);
 }
@@ -141,9 +149,7 @@ canvas {
 }
 
 .encouragementBubble {
-  position: absolute;
-  left: calc(50% + 150px);
-  top: calc(50% - 132px);
+  position: fixed;
   max-width: 280px;
   padding: 14px 16px;
   border-radius: 18px;
@@ -162,14 +168,19 @@ canvas {
 .encouragementBubble::after {
   content: "";
   position: absolute;
-  left: 18px;
-  bottom: -9px;
+  left: 12px;
+  bottom: -8px;
   width: 18px;
   height: 18px;
   background: rgba(8, 12, 22, 0.86);
   border-right: 1px solid rgba(173, 214, 255, 0.22);
   border-bottom: 1px solid rgba(173, 214, 255, 0.22);
   transform: rotate(45deg);
+}
+
+.attachedBubble {
+  transform: translate(22px, -94%);
+  pointer-events: none;
 }
 
 .floatingInput {
@@ -243,10 +254,31 @@ canvas {
   transform: translateY(0) scale(1);
 }
 
-.musicPlayer {
+.musicDock {
   position: absolute;
   right: 24px;
   bottom: 24px;
+  z-index: 45;
+}
+
+.musicDockButton {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(187, 214, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(10, 14, 26, 0.78);
+  color: #eef4ff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+}
+
+.musicPlayer {
+  position: absolute;
+  right: 0;
+  bottom: 56px;
   width: min(440px, calc(100vw - 48px));
   padding: 12px 14px 14px;
   border-radius: 22px;
@@ -254,7 +286,19 @@ canvas {
   border: 1px solid rgba(182, 215, 255, 0.18);
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(18px);
-  z-index: 45;
+  opacity: 0;
+  transform: translateY(14px) scale(0.98);
+  transform-origin: bottom right;
+  transition:
+    opacity 220ms ease,
+    transform 280ms cubic-bezier(0.2, 0.72, 0.2, 1);
+  pointer-events: none;
+}
+
+.musicDockOpen .musicPlayer {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
 }
 
 .trackSelectButton {
