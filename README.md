@@ -1,40 +1,42 @@
-Preview - 
+# React Three Fiber Blob
 
+우주 배경 위에서 고민을 포스트잇으로 만들고, 슬라임 Blob에 흡수시키며 인터랙션하는 Next.js 프로젝트입니다.
 
-https://user-images.githubusercontent.com/16558205/207250581-3f484072-38da-4cb6-842d-17cac01aa137.mov
+## 실행 방법
 
+1. 의존성을 설치합니다.
 
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+```bash
+npm install
+```
 
-## Getting Started
-
-First, run the development server:
+2. 개발 서버를 실행합니다.
 
 ```bash
 npm run dev
-# or
-yarn dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. 브라우저에서 아래 주소를 엽니다.
 
-You can start editing the page by modifying `pages/index.js`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.js`.
+## 할 수 있는 것
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
+- 빈 배경을 클릭해 텍스트를 입력하고 `Enter`로 포스트잇을 만들기
+- 포스트잇을 드래그해서 자유롭게 옮기고 Blob 안으로 드롭하기
+- 드롭 시 포스트잇이 찢어지고, 텍스트와 파티클이 Blob 안으로 빨려 들어가는 효과 보기
+- Blob 색이 흡수된 뒤 클릭 3번 또는 1분 뒤 자동으로 흰색으로 정화되는 흐름 보기
+- Blob을 여러 번 눌러 응원 문구 받기
+- 우하단 음악 아이콘에서 배경음악 재생, 트랙 변경, 음량 조절하기
+- 좌하단 도움말 아이콘에 마우스를 올려 사용 방법 보기
 
-## Learn More
+## 스크립트
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+```bash
+npm run dev
+npm run build
+npm run start
+npm run lint
+```
