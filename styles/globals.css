@@ -168,7 +168,7 @@ canvas {
 .encouragementBubble::after {
   content: "";
   position: absolute;
-  left: 12px;
+  left: 18px;
   bottom: -8px;
   width: 18px;
   height: 18px;
@@ -179,7 +179,7 @@ canvas {
 }
 
 .attachedBubble {
-  transform: translate(22px, -94%);
+  transform: translate(20px, calc(-100% - 18px));
   pointer-events: none;
 }
 
@@ -262,6 +262,10 @@ canvas {
 }
 
 .musicDockButton {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 44px;
   height: 44px;
   border: 1px solid rgba(187, 214, 255, 0.24);
@@ -273,6 +277,19 @@ canvas {
   cursor: pointer;
   backdrop-filter: blur(18px);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+}
+
+.musicDockButtonMuted::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 24px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(255, 157, 190, 0.95);
+  box-shadow: 0 0 10px rgba(255, 157, 190, 0.45);
+  transform: translate(-50%, -50%) rotate(-42deg);
 }
 
 .musicPlayer {
@@ -362,19 +379,22 @@ canvas {
 
 .playerControls {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 92px minmax(140px, 1fr) 62px;
   align-items: center;
   gap: 12px;
   margin-top: 12px;
 }
 
 .muteButton {
+  width: 92px;
+  justify-self: start;
   padding: 8px 12px;
   border: 1px solid rgba(181, 215, 255, 0.18);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.04);
   color: #eef4ff;
   cursor: pointer;
+  text-align: center;
 }
 
 .volumeSlider {

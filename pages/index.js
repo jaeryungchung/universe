@@ -32,6 +32,7 @@ const BLOB_BASE_TINT = "#f2efe7";
 const FADE_STEPS = [0, 0.45, 0.72, 1];
 const SHOCK_TEXT_LENGTH = 15;
 const ENCOURAGEMENT_TRIGGER = 10;
+const BLOB_DECAY_MS = 60000;
 
 function clampNotePosition(x, y, width, height) {
   if (typeof window === "undefined") {
@@ -70,6 +71,13 @@ function mixHexWithWhite(hex, amount) {
   return `#${blend(r)}${blend(g)}${blend(b)}`;
 }
 
+function getNextNoteColor(previousColorName) {
+  const availableColors = NOTE_COLORS.filter(
+    (color) => color.name !== previousColorName
+  );
+  return availableColors[Math.floor(Math.random() * availableColors.length)];
+}
+
 function createBurstParticles(color, count, minRadius, maxRadius) {
   return Array.from({ length: count }, (_, index) => {
     const angle = (Math.PI * 2 * index) / count + Math.random() * 0.36;
@@ -95,6 +103,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
   const playerRef = useRef(null);
   const playerCloseTimeoutRef = useRef(null);
   const latestPointerRef = useRef({ x: 0, y: 0 });
+  const lastNoteColorRef = useRef(null);
   const [draft, setDraft] = useState(null);
   const [notes, setNotes] = useState([]);
   const [absorbingNotes, setAbsorbingNotes] = useState([]);
@@ -121,12 +130,11 @@ export default function Home({ encouragementLines, tutorialLines }) {
     y: 0,
   });
   const [activeTrackId, setActiveTrackId] = useState(TRACKS[0].id);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [volume, setVolume] = useState(0.45);
   const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   const [hasStartedAudio, setHasStartedAudio] = useState(false);
-  const [audioBootMuted, setAudioBootMuted] = useState(true);
 
   const activeTrack = useMemo(
     () => TRACKS.find((track) => track.id === activeTrackId) || TRACKS[0],
@@ -188,13 +196,17 @@ export default function Home({ encouragementLines, tutorialLines }) {
       return;
     }
 
-    audio.muted = isMuted || audioBootMuted;
-  }, [audioBootMuted, isMuted]);
+    audio.muted = isMuted;
+  }, [isMuted]);
 
   useEffect(() => {
     const handlePointerDown = (event) => {
       if (!playerRef.current?.contains(event.target)) {
         setIsTrackMenuOpen(false);
+        setIsPlayerOpen(false);
+        if (playerCloseTimeoutRef.current) {
+          window.clearTimeout(playerCloseTimeoutRef.current);
+        }
       }
     };
 
@@ -230,7 +242,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
   }, [encouragementBubble]);
 
   useEffect(() => {
-    attemptPlayAudio({ forceMutedBoot: true });
+    attemptPlayAudio();
     return () => {
       if (playerCloseTimeoutRef.current) {
         window.clearTimeout(playerCloseTimeoutRef.current);
@@ -238,18 +250,30 @@ export default function Home({ encouragementLines, tutorialLines }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (blobState.tint === BLOB_BASE_TINT) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setBlobState({
+        source: BLOB_BASE_TINT,
+        step: 3,
+        tint: BLOB_BASE_TINT,
+      });
+    }, BLOB_DECAY_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [blobState.tint]);
+
   const resetBlobClickStreak = () => {
     setBlobClickStreak(0);
   };
 
-  const attemptPlayAudio = ({ forceMutedBoot = false } = {}) => {
+  const attemptPlayAudio = () => {
     const audio = audioRef.current;
     if (!audio) {
       return;
-    }
-
-    if (forceMutedBoot) {
-      audio.muted = true;
     }
 
     const playPromise = audio.play();
@@ -257,21 +281,11 @@ export default function Home({ encouragementLines, tutorialLines }) {
       playPromise
         .then(() => {
           setHasStartedAudio(true);
-          if (forceMutedBoot) {
-            window.setTimeout(() => {
-              setAudioBootMuted(false);
-            }, 320);
-          }
         })
         .catch(() => {});
       return;
     }
     setHasStartedAudio(true);
-    if (forceMutedBoot) {
-      window.setTimeout(() => {
-        setAudioBootMuted(false);
-      }, 320);
-    }
   };
 
   const schedulePlayerClose = () => {
@@ -304,7 +318,8 @@ export default function Home({ encouragementLines, tutorialLines }) {
       return;
     }
 
-    const nextColor = NOTE_COLORS[notes.length % NOTE_COLORS.length];
+    const nextColor = getNextNoteColor(lastNoteColorRef.current);
+    lastNoteColorRef.current = nextColor.name;
     setNotes((current) => [
       ...current,
       {
@@ -548,7 +563,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
         src={activeTrack.src}
         loop
         preload="auto"
-        muted={isMuted || audioBootMuted}
+        muted={isMuted}
         autoPlay
         playsInline
       />
@@ -709,16 +724,17 @@ export default function Home({ encouragementLines, tutorialLines }) {
       >
         <button
           type="button"
-          className="musicDockButton"
+          className={`musicDockButton${isMuted ? " musicDockButtonMuted" : ""}`}
           onMouseEnter={() => {
-            keepPlayerOpen();
-            attemptPlayAudio({ forceMutedBoot: true });
-          }}
-          onClick={() => {
             keepPlayerOpen();
             attemptPlayAudio();
           }}
-          aria-label="Music player"
+          onClick={() => {
+            keepPlayerOpen();
+            setIsMuted((current) => !current);
+            attemptPlayAudio();
+          }}
+          aria-label={isMuted ? "Unmute music" : "Mute music"}
         >
           ♫
         </button>
@@ -764,7 +780,6 @@ export default function Home({ encouragementLines, tutorialLines }) {
               className="muteButton"
               onClick={() => {
                 keepPlayerOpen();
-                setAudioBootMuted(false);
                 setIsMuted((current) => !current);
                 attemptPlayAudio();
               }}
@@ -780,7 +795,6 @@ export default function Home({ encouragementLines, tutorialLines }) {
               value={volume}
               onChange={(event) => {
                 keepPlayerOpen();
-                setAudioBootMuted(false);
                 setVolume(Number(event.target.value));
                 attemptPlayAudio();
               }}
