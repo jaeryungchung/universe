@@ -4,7 +4,7 @@ import { useFrame } from "@react-three/fiber";
 import vertexShader from "./vertexShader";
 import fragmentShader from "./fragmentShader";
 
-const Blob = ({ tint = "#f2efe7", absorbRadius = 112 }) => {
+const Blob = ({ tint = "#f2efe7", absorbRadius = 112, onClick }) => {
   const mesh = useRef();
   const hover = useRef({ mode: "idle", uv: new Vector2(0.5, 0.5) });
   const activity = useRef(0);
@@ -51,7 +51,7 @@ const Blob = ({ tint = "#f2efe7", absorbRadius = 112 }) => {
     );
 
     if (hover.current.mode !== "inside") {
-      if (pointerDistance <= absorbRadius * 0.3) {
+      if (pointerDistance <= absorbRadius * 0.55) {
         hover.current.mode = "near";
         hover.current.uv.set(pointer.x * 0.5 + 0.5, 1 - (pointer.y * 0.5 + 0.5));
       } else {
@@ -118,6 +118,10 @@ const Blob = ({ tint = "#f2efe7", absorbRadius = 112 }) => {
       }}
       onPointerOut={() => {
         hover.current.mode = "idle";
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick?.();
       }}
     >
       <icosahedronBufferGeometry args={[2, 20]} />

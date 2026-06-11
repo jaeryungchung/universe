@@ -4,15 +4,17 @@ import Blob from "../components/Blob";
 import StickyNote from "../components/StickyNote";
 
 const NOTE_COLORS = [
-  { name: "pink", fill: "#f7b7cb", fold: "#eb99b4" },
-  { name: "yellow", fill: "#f5e58a", fold: "#e2cc62" },
-  { name: "blue", fill: "#a9d7f6", fold: "#80b6db" },
-  { name: "green", fill: "#b8e3b0", fold: "#91c28b" },
+  { name: "pink", fill: "#f7b7cb", fold: "#eb99b4", deep: "#bb4d7d" },
+  { name: "yellow", fill: "#f5e58a", fold: "#e2cc62", deep: "#ab8123" },
+  { name: "blue", fill: "#a9d7f6", fold: "#80b6db", deep: "#376d97" },
+  { name: "green", fill: "#b8e3b0", fold: "#91c28b", deep: "#4e8755" },
 ];
 
 const INPUT_WIDTH = 196;
 const INPUT_HEIGHT = 138;
-const ABSORB_RADIUS = 112;
+const ABSORB_RADIUS = 172;
+const BLOB_BASE_TINT = "#f2efe7";
+const FADE_STEPS = [0, 0.45, 0.72, 1];
 
 function clampNotePosition(x, y, width, height) {
   if (typeof window === "undefined") {
@@ -29,13 +31,31 @@ function wrapPreviewText(value) {
   return value.replace(/\n/g, " ").trim();
 }
 
+function mixHexWithWhite(hex, amount) {
+  const normalized = hex.replace("#", "");
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+
+  const blend = (channel) =>
+    Math.round(channel + (255 - channel) * amount)
+      .toString(16)
+      .padStart(2, "0");
+
+  return `#${blend(r)}${blend(g)}${blend(b)}`;
+}
+
 export default function Home() {
   const textareaRef = useRef(null);
   const [draft, setDraft] = useState(null);
   const [notes, setNotes] = useState([]);
   const [absorbingNotes, setAbsorbingNotes] = useState([]);
   const [absorbingText, setAbsorbingText] = useState([]);
-  const [blobTint, setBlobTint] = useState("#f2efe7");
+  const [blobState, setBlobState] = useState({
+    source: BLOB_BASE_TINT,
+    step: 3,
+    tint: BLOB_BASE_TINT,
+  });
 
   useEffect(() => {
     if (draft && textareaRef.current) {
@@ -99,6 +119,7 @@ export default function Home() {
         color: nextColor.name,
         fill: nextColor.fill,
         fold: nextColor.fold,
+        deep: nextColor.deep,
       },
     ]);
     setDraft(null);
@@ -132,7 +153,11 @@ export default function Home() {
 
   const absorbNote = (note) => {
     setNotes((current) => current.filter((item) => item.id !== note.id));
-    setBlobTint(note.fill);
+    setBlobState({
+      source: note.fill,
+      step: 0,
+      tint: note.fill,
+    });
 
     setAbsorbingNotes((current) => [
       ...current,
@@ -144,6 +169,7 @@ export default function Home() {
         y: note.y,
         fill: note.fill,
         fold: note.fold,
+        deep: note.deep,
       },
     ]);
 
@@ -153,7 +179,7 @@ export default function Home() {
       {
         id: absorbId,
         text: wrapPreviewText(note.text),
-        color: note.fill,
+        color: note.deep,
       },
     ]);
 
@@ -165,6 +191,24 @@ export default function Home() {
         current.filter((item) => item.id !== absorbId)
       );
     }, 2600);
+  };
+
+  const handleBlobClick = () => {
+    setBlobState((current) => {
+      if (current.step >= 3) {
+        return current;
+      }
+
+      const nextStep = current.step + 1;
+      return {
+        ...current,
+        step: nextStep,
+        tint:
+          nextStep >= 3
+            ? BLOB_BASE_TINT
+            : mixHexWithWhite(current.source, FADE_STEPS[nextStep]),
+      };
+    });
   };
 
   const handleNoteDrop = ({ id, x, y }) => {
@@ -209,7 +253,11 @@ export default function Home() {
         camera={{ position: [0, 0, 8] }}
         onPointerMissed={(event) => startDraftAtPoint(event.clientX, event.clientY)}
       >
-        <Blob tint={blobTint} absorbRadius={ABSORB_RADIUS} />
+        <Blob
+          tint={blobState.tint}
+          absorbRadius={ABSORB_RADIUS}
+          onClick={handleBlobClick}
+        />
       </Canvas>
 
       <div className="sceneGlow" aria-hidden="true" />
@@ -257,14 +305,21 @@ export default function Home() {
           style={{
             left: note.x,
             top: note.y,
-            backgroundColor: note.fill,
-            color: "rgba(53, 40, 31, 0.82)",
+            color: note.deep,
+            "--note-fill": note.fill,
             "--fold-color": note.fold,
           }}
         >
-          <div className="absorbNoteText">{note.text}</div>
-          <div className="absorbGhostFold" />
-          <div className="absorbGhostShadow" />
+          <div className="absorbTearHalf absorbTearLeft">
+            <div className="absorbNoteText">{note.text}</div>
+          </div>
+          <div className="absorbTearHalf absorbTearRight">
+            <div className="absorbNoteText">{note.text}</div>
+          </div>
+          <div className="absorbGhostFold absorbGhostFoldLeft" />
+          <div className="absorbGhostFold absorbGhostFoldRight" />
+          <div className="absorbGhostShadow absorbGhostShadowLeft" />
+          <div className="absorbGhostShadow absorbGhostShadowRight" />
         </div>
       ))}
 
