@@ -15,6 +15,7 @@ const INPUT_HEIGHT = 138;
 const ABSORB_RADIUS = 172;
 const BLOB_BASE_TINT = "#f2efe7";
 const FADE_STEPS = [0, 0.45, 0.72, 1];
+const SHOCK_TEXT_LENGTH = 15;
 
 function clampNotePosition(x, y, width, height) {
   if (typeof window === "undefined") {
@@ -31,6 +32,10 @@ function wrapPreviewText(value) {
   return value.replace(/\n/g, " ").trim();
 }
 
+function countMeaningfulChars(value) {
+  return value.replace(/\s/g, "").length;
+}
+
 function mixHexWithWhite(hex, amount) {
   const normalized = hex.replace("#", "");
   const r = parseInt(normalized.slice(0, 2), 16);
@@ -45,12 +50,41 @@ function mixHexWithWhite(hex, amount) {
   return `#${blend(r)}${blend(g)}${blend(b)}`;
 }
 
+function createBurstParticles(color, count, minRadius, maxRadius) {
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (Math.PI * 2 * index) / count + Math.random() * 0.36;
+    const radius = minRadius + Math.random() * (maxRadius - minRadius);
+    const drift = 0.75 + Math.random() * 0.6;
+
+    return {
+      id: `${index}-${Math.random().toString(36).slice(2, 7)}`,
+      color,
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+      scale: 0.8 + Math.random() * 1.6,
+      delay: Math.random() * 0.08,
+      duration: 0.55 + Math.random() * 0.28,
+      drift,
+    };
+  });
+}
+
 export default function Home() {
   const textareaRef = useRef(null);
   const [draft, setDraft] = useState(null);
   const [notes, setNotes] = useState([]);
   const [absorbingNotes, setAbsorbingNotes] = useState([]);
   const [absorbingText, setAbsorbingText] = useState([]);
+  const [textBursts, setTextBursts] = useState([]);
+  const [blobBurst, setBlobBurst] = useState({
+    key: 0,
+    color: BLOB_BASE_TINT,
+  });
+  const [blobMotion, setBlobMotion] = useState({
+    bounceKey: 0,
+    quakeKey: 0,
+  });
+  const [cosmicShock, setCosmicShock] = useState(null);
   const [blobState, setBlobState] = useState({
     source: BLOB_BASE_TINT,
     step: 3,
@@ -152,12 +186,39 @@ export default function Home() {
   };
 
   const absorbNote = (note) => {
+    const centerX =
+      typeof window === "undefined" ? 0 : Math.round(window.innerWidth / 2);
+    const centerY =
+      typeof window === "undefined" ? 0 : Math.round(window.innerHeight / 2);
+    const originX = note.x + INPUT_WIDTH / 2;
+    const originY = note.y + INPUT_HEIGHT / 2;
+    const isLongText = countMeaningfulChars(note.text) >= SHOCK_TEXT_LENGTH;
+
     setNotes((current) => current.filter((item) => item.id !== note.id));
     setBlobState({
       source: note.fill,
       step: 0,
       tint: note.fill,
     });
+    setBlobBurst((current) => ({
+      key: current.key + 1,
+      color: note.fill,
+    }));
+    if (isLongText) {
+      setBlobMotion((current) => ({
+        ...current,
+        quakeKey: current.quakeKey + 1,
+      }));
+      const shockId = `shock-${note.id}-${Date.now()}`;
+      setCosmicShock({
+        id: shockId,
+        color: note.fill,
+        deep: note.deep,
+      });
+      window.setTimeout(() => {
+        setCosmicShock((current) => (current?.id === shockId ? null : current));
+      }, 1200);
+    }
 
     setAbsorbingNotes((current) => [
       ...current,
@@ -174,12 +235,26 @@ export default function Home() {
     ]);
 
     const absorbId = `absorb-${note.id}-${Date.now()}`;
+    const burstId = `burst-${note.id}-${Date.now()}`;
     setAbsorbingText((current) => [
       ...current,
       {
         id: absorbId,
         text: wrapPreviewText(note.text),
         color: note.deep,
+        originX,
+        originY,
+        deltaX: centerX - originX,
+        deltaY: centerY - originY,
+      },
+    ]);
+    setTextBursts((current) => [
+      ...current,
+      {
+        id: burstId,
+        x: originX,
+        y: originY,
+        particles: createBurstParticles(note.deep, 34, 28, 164),
       },
     ]);
 
@@ -190,10 +265,15 @@ export default function Home() {
       setAbsorbingText((current) =>
         current.filter((item) => item.id !== absorbId)
       );
+      setTextBursts((current) =>
+        current.filter((item) => item.id !== burstId)
+      );
     }, 2600);
   };
 
   const handleBlobClick = () => {
+    const shouldBounce = blobState.step >= 2;
+
     setBlobState((current) => {
       if (current.step >= 3) {
         return current;
@@ -209,6 +289,13 @@ export default function Home() {
             : mixHexWithWhite(current.source, FADE_STEPS[nextStep]),
       };
     });
+
+    if (shouldBounce) {
+      setBlobMotion((motion) => ({
+        ...motion,
+        bounceKey: motion.bounceKey + 1,
+      }));
+    }
   };
 
   const handleNoteDrop = ({ id, x, y }) => {
@@ -248,7 +335,7 @@ export default function Home() {
   };
 
   return (
-    <div className="container">
+    <div className={`container${cosmicShock ? " cosmicShockActive" : ""}`}>
       <Canvas
         camera={{ position: [0, 0, 8] }}
         onPointerMissed={(event) => startDraftAtPoint(event.clientX, event.clientY)}
@@ -257,11 +344,26 @@ export default function Home() {
           tint={blobState.tint}
           absorbRadius={ABSORB_RADIUS}
           onClick={handleBlobClick}
+          burstSignal={blobBurst.key}
+          burstColor={blobBurst.color}
+          bounceSignal={blobMotion.bounceKey}
+          quakeSignal={blobMotion.quakeKey}
         />
       </Canvas>
 
       <div className="sceneGlow" aria-hidden="true" />
+      <div className="blobMeteorRing" aria-hidden="true" />
       <div className="blobTargetRing" aria-hidden="true" />
+      {cosmicShock ? (
+        <div
+          className="cosmicShock"
+          aria-hidden="true"
+          style={{
+            "--shock-color": cosmicShock.color,
+            "--shock-deep": cosmicShock.deep,
+          }}
+        />
+      ) : null}
 
       {draft ? (
         <textarea
@@ -324,8 +426,37 @@ export default function Home() {
       ))}
 
       <div className="absorbLayer" aria-hidden="true">
+        {textBursts.map((burst) =>
+          burst.particles.map((particle) => (
+            <span
+              key={particle.id}
+              className="textBurstParticle"
+              style={{
+                left: burst.x,
+                top: burst.y,
+                "--particle-x": `${particle.x}px`,
+                "--particle-y": `${particle.y}px`,
+                "--particle-scale": particle.scale,
+                "--particle-color": particle.color,
+                "--particle-delay": `${particle.delay}s`,
+                "--particle-duration": `${particle.duration}s`,
+                "--particle-drift": particle.drift,
+              }}
+            />
+          ))
+        )}
         {absorbingText.map((item) => (
-          <div key={item.id} className="orbitText" style={{ color: item.color }}>
+          <div
+            key={item.id}
+            className="orbitText"
+            style={{
+              left: item.originX,
+              top: item.originY,
+              color: item.color,
+              "--orbit-dx": `${item.deltaX}px`,
+              "--orbit-dy": `${item.deltaY}px`,
+            }}
+          >
             <span>{item.text}</span>
           </div>
         ))}

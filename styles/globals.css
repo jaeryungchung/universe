@@ -31,6 +31,10 @@ body {
   cursor: text;
 }
 
+.container.cosmicShockActive {
+  animation: cosmicShake 1.05s cubic-bezier(0.22, 0.7, 0.2, 1);
+}
+
 .container::before,
 .container::after {
   content: "";
@@ -74,6 +78,54 @@ canvas {
   pointer-events: none;
 }
 
+.blobMeteorRing {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 520px;
+  height: 520px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  filter: blur(1px);
+}
+
+.blobMeteorRing::before,
+.blobMeteorRing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+.blobMeteorRing::before {
+  background:
+    conic-gradient(
+      from 42deg,
+      transparent 0deg 26deg,
+      rgba(255, 255, 255, 0.16) 32deg,
+      rgba(174, 222, 255, 0.58) 40deg,
+      rgba(255, 255, 255, 0.12) 48deg,
+      transparent 64deg 168deg,
+      rgba(255, 210, 248, 0.12) 176deg,
+      rgba(173, 215, 255, 0.42) 184deg,
+      rgba(255, 255, 255, 0.08) 192deg,
+      transparent 210deg 360deg
+    );
+  mask: radial-gradient(circle, transparent 0 31%, rgba(0, 0, 0, 0.95) 38%, transparent 58%);
+  animation: meteorRingSpin 18s linear infinite;
+}
+
+.blobMeteorRing::after {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(129, 189, 255, 0.18), transparent 26%),
+    radial-gradient(circle at 40% 54%, rgba(255, 255, 255, 0.09), transparent 42%);
+  transform: scale(1.24, 0.58) rotate(-18deg);
+  filter: blur(10px);
+  opacity: 0.9;
+}
+
 .blobTargetRing {
   position: absolute;
   left: 50%;
@@ -114,6 +166,21 @@ canvas {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+.textBurstParticle {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, 0.95) 0 42%, var(--particle-color) 44% 100%);
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--particle-color) 72%, white 28%),
+    0 0 16px color-mix(in srgb, var(--particle-color) 48%, transparent 52%);
+  transform: translate(-50%, -50%) scale(var(--particle-scale));
+  animation: textBurstPop var(--particle-duration) ease-out var(--particle-delay) forwards;
+  z-index: 26;
 }
 
 .absorbNoteGhost {
@@ -199,13 +266,11 @@ canvas {
 
 .orbitText {
   position: absolute;
-  left: 50%;
-  top: 50%;
   font-family: "Nanum Pen Script", "Marker Felt", cursive;
   font-size: 34px;
   line-height: 1;
   text-shadow: 0 0 16px rgba(255, 255, 255, 0.22);
-  animation: textOrbit 2.6s ease-out forwards;
+  animation: textOrbit 2.6s cubic-bezier(0.22, 0.7, 0.18, 1) forwards;
   transform-origin: 0 0;
 }
 
@@ -218,19 +283,39 @@ canvas {
 @keyframes textOrbit {
   0% {
     opacity: 0;
-    transform: translate(-50%, -50%) scale(1.9);
+    transform: translate(-50%, -50%) scale(1.5);
   }
-  20% {
+  12% {
     opacity: 1;
-    transform: translate(-50%, -50%) rotate(0deg) translateX(42px) scale(1.25);
+    transform: translate(
+        calc(-50% + (var(--orbit-dx) * 0.08)),
+        calc(-50% + (var(--orbit-dy) * 0.08))
+      )
+      scale(1.78);
+  }
+  42% {
+    opacity: 1;
+    transform: translate(
+        calc(-50% + (var(--orbit-dx) * 0.9)),
+        calc(-50% + (var(--orbit-dy) * 0.9))
+      )
+      rotate(18deg) translateX(24px) scale(1.08);
   }
   78% {
     opacity: 0.9;
-    transform: translate(-50%, -50%) rotate(310deg) translateX(76px) scale(0.72);
+    transform: translate(
+        calc(-50% + var(--orbit-dx)),
+        calc(-50% + var(--orbit-dy))
+      )
+      rotate(310deg) translateX(84px) scale(0.76);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -50%) rotate(420deg) translateX(8px) scale(0.16);
+    transform: translate(
+        calc(-50% + var(--orbit-dx)),
+        calc(-50% + var(--orbit-dy))
+      )
+      rotate(420deg) translateX(10px) scale(0.14);
   }
 }
 
@@ -268,5 +353,168 @@ canvas {
   100% {
     opacity: 0.58;
     transform: scale(1);
+  }
+}
+
+@keyframes textBurstPop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(calc(var(--particle-scale) * 0.4));
+  }
+  12% {
+    opacity: 1;
+    transform: translate(
+        calc(-50% + (var(--particle-x) * 0.28)),
+        calc(-50% + (var(--particle-y) * 0.28))
+      )
+      scale(calc(var(--particle-scale) * 1.4));
+  }
+  46% {
+    opacity: 1;
+    transform: translate(
+        calc(-50% + (var(--particle-x) * 1.08)),
+        calc(-50% + (var(--particle-y) * 1.08))
+      )
+      scale(calc(var(--particle-scale) * 0.88));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(
+        calc(-50% + (var(--particle-x) * (var(--particle-drift) + 0.85))),
+        calc(-50% + (var(--particle-y) * (var(--particle-drift) + 0.85)))
+      )
+      scale(calc(var(--particle-scale) * 0.08));
+  }
+}
+
+.cosmicShock {
+  position: absolute;
+  inset: -10%;
+  pointer-events: none;
+  z-index: 24;
+  mix-blend-mode: screen;
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--shock-color) 56%, white 44%) 0, transparent 22%),
+    radial-gradient(circle at 18% 32%, rgba(255, 255, 255, 0.18), transparent 18%),
+    radial-gradient(circle at 84% 20%, color-mix(in srgb, var(--shock-deep) 44%, white 56%) 0, transparent 16%),
+    linear-gradient(
+      108deg,
+      transparent 0% 28%,
+      rgba(255, 255, 255, 0.06) 34%,
+      color-mix(in srgb, var(--shock-color) 48%, white 52%) 48%,
+      rgba(255, 255, 255, 0.08) 60%,
+      transparent 76%
+    );
+  filter: blur(1px);
+  animation: cosmicFlash 1.35s cubic-bezier(0.2, 0.72, 0.2, 1) forwards;
+}
+
+.cosmicShock::before,
+.cosmicShock::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.cosmicShock::before {
+  background:
+    radial-gradient(circle at 24% 66%, rgba(255, 255, 255, 0.82) 0 1px, transparent 2px),
+    radial-gradient(circle at 48% 38%, rgba(255, 255, 255, 0.96) 0 1.4px, transparent 2.4px),
+    radial-gradient(circle at 74% 58%, rgba(255, 255, 255, 0.78) 0 1.1px, transparent 2px),
+    radial-gradient(circle at 62% 24%, rgba(196, 226, 255, 0.74) 0 1.2px, transparent 2px);
+  animation: shockStars 1.15s ease-out forwards;
+}
+
+.cosmicShock::after {
+  background: linear-gradient(
+    118deg,
+    transparent 0 26%,
+    rgba(255, 255, 255, 0.04) 32%,
+    rgba(255, 255, 255, 0.9) 48%,
+    rgba(255, 255, 255, 0.04) 64%,
+    transparent 72%
+  );
+  transform: translateX(-20%) rotate(-8deg);
+  filter: blur(8px);
+  animation: shockMeteor 1.15s cubic-bezier(0.22, 0.7, 0.2, 1) forwards;
+}
+
+@keyframes meteorRingSpin {
+  0% {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.64;
+  }
+  50% {
+    transform: rotate(180deg) scale(1.02);
+    opacity: 0.92;
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+    opacity: 0.64;
+  }
+}
+
+@keyframes cosmicFlash {
+  0% {
+    opacity: 0;
+  }
+  28% {
+    opacity: 0.62;
+  }
+  72% {
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes shockMeteor {
+  0% {
+    opacity: 0;
+    transform: translateX(-24%) translateY(-5%) rotate(-10deg) scale(0.88);
+  }
+  34% {
+    opacity: 0.75;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(28%) translateY(6%) rotate(-4deg) scale(1.06);
+  }
+}
+
+@keyframes shockStars {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  30% {
+    opacity: 0.88;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes cosmicShake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  16% {
+    transform: translate3d(-2px, 1px, 0);
+  }
+  32% {
+    transform: translate3d(2px, -2px, 0);
+  }
+  48% {
+    transform: translate3d(-2px, -1px, 0);
+  }
+  64% {
+    transform: translate3d(2px, 1px, 0);
+  }
+  80% {
+    transform: translate3d(-1px, 1px, 0);
   }
 }

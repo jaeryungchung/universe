@@ -1,11 +1,27 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Color, DoubleSide, MathUtils, Vector2, Vector3 } from "three";
 import { useFrame } from "@react-three/fiber";
 import vertexShader from "./vertexShader";
 import fragmentShader from "./fragmentShader";
 
-const Blob = ({ tint = "#f2efe7", absorbRadius = 112, onClick }) => {
+const BURST_COUNT = 18;
+
+const Blob = ({
+  tint = "#f2efe7",
+  absorbRadius = 112,
+  onClick,
+  burstSignal = 0,
+  burstColor = "#f2efe7",
+  bounceSignal = 0,
+  quakeSignal = 0,
+}) => {
+  const root = useRef();
   const mesh = useRef();
+  const burstGroup = useRef();
+  const burstProgress = useRef(1);
+  const burstColorRef = useRef(new Color(burstColor));
+  const bounceProgress = useRef(1.2);
+  const quakeProgress = useRef(1.2);
   const hover = useRef({ mode: "idle", uv: new Vector2(0.5, 0.5) });
   const activity = useRef(0);
   const tintColor = useRef(new Color(tint));
@@ -27,6 +43,34 @@ const Blob = ({ tint = "#f2efe7", absorbRadius = 112, onClick }) => {
   useEffect(() => {
     targetTintColor.current.set(tint);
   }, [tint]);
+
+  useEffect(() => {
+    burstProgress.current = 0;
+    burstColorRef.current.set(burstColor);
+  }, [burstColor, burstSignal]);
+
+  useEffect(() => {
+    bounceProgress.current = 0;
+  }, [bounceSignal]);
+
+  useEffect(() => {
+    quakeProgress.current = 0;
+  }, [quakeSignal]);
+
+  const burstSeeds = useMemo(
+    () =>
+      Array.from({ length: BURST_COUNT }, (_, index) => {
+        const angle = (Math.PI * 2 * index) / BURST_COUNT;
+        return {
+          angle,
+          radius: 0.32 + (index % 5) * 0.045,
+          speed: 0.62 + (index % 4) * 0.15,
+          size: 0.02 + (index % 3) * 0.012,
+          z: -0.7 - (index % 4) * 0.08,
+        };
+      }),
+    []
+  );
 
   useFrame((state, delta) => {
     const { camera, pointer, size } = state;
@@ -97,43 +141,93 @@ const Blob = ({ tint = "#f2efe7", absorbRadius = 112, onClick }) => {
       tint === "#f2efe7" ? 0 : 0.82,
       0.04
     );
+
+    const bounceT = Math.min(1.1, bounceProgress.current);
+    const bounceWave =
+      bounceT <= 1
+        ? -Math.sin(bounceT * Math.PI) * Math.exp(-3.2 * bounceT) * 0.075
+        : 0;
+
+    const quakeT = Math.min(1.1, quakeProgress.current);
+    const quakeFade = quakeT <= 1 ? Math.exp(-3.1 * quakeT) : 0;
+    const quakeX = quakeFade * Math.sin(quakeT * 42) * 0.08;
+    const quakeY = quakeFade * Math.cos(quakeT * 34) * 0.06;
+
+    if (root.current) {
+      root.current.scale.setScalar(1 + bounceWave);
+      root.current.position.set(quakeX, quakeY, 0);
+    }
+
+    bounceProgress.current = Math.min(1.2, bounceProgress.current + delta * 2.35);
+    quakeProgress.current = Math.min(1.2, quakeProgress.current + delta * 1.8);
+
+    if (burstGroup.current) {
+      burstProgress.current = Math.min(1.2, burstProgress.current + delta * 1.9);
+
+      burstGroup.current.children.forEach((child, index) => {
+        const seed = burstSeeds[index];
+        const progress = burstProgress.current;
+        const eased = 1 - Math.pow(1 - Math.min(progress, 1), 3);
+        const distance = seed.radius + eased * seed.speed * 1.25;
+        child.position.set(
+          Math.cos(seed.angle) * distance,
+          Math.sin(seed.angle) * distance,
+          seed.z
+        );
+        const scale = Math.max(0.001, seed.size * (1.2 - eased * 0.9));
+        child.scale.setScalar(scale);
+        child.material.opacity = Math.max(0, 0.9 - eased * 0.9);
+        child.material.color.copy(burstColorRef.current);
+      });
+    }
   });
 
   return (
-    <mesh
-      ref={mesh}
-      scale={1.5}
-      position={[0, 0, 0]}
-      onPointerOver={(event) => {
-        hover.current.mode = "inside";
-        if (event.uv) {
-          hover.current.uv.set(event.uv.x, event.uv.y);
-        }
-      }}
-      onPointerMove={(event) => {
-        hover.current.mode = "inside";
-        if (event.uv) {
-          hover.current.uv.set(event.uv.x, event.uv.y);
-        }
-      }}
-      onPointerOut={() => {
-        hover.current.mode = "idle";
-      }}
-      onClick={(event) => {
-        event.stopPropagation();
-        onClick?.();
-      }}
-    >
-      <icosahedronBufferGeometry args={[2, 20]} />
-      <shaderMaterial
-        vertexShader={vertexShader}
-        fragmentShader={fragmentShader}
-        uniforms={uniforms.current}
-        transparent
-        depthWrite={false}
-        side={DoubleSide}
-      />
-    </mesh>
+    <group ref={root}>
+      <group ref={burstGroup}>
+        {burstSeeds.map((seed, index) => (
+          <mesh key={index} position={[0, 0, seed.z]}>
+            <sphereGeometry args={[1, 6, 6]} />
+            <meshBasicMaterial transparent depthWrite={false} opacity={0} />
+          </mesh>
+        ))}
+      </group>
+
+      <mesh
+        ref={mesh}
+        scale={1.5}
+        position={[0, 0, 0]}
+        onPointerOver={(event) => {
+          hover.current.mode = "inside";
+          if (event.uv) {
+            hover.current.uv.set(event.uv.x, event.uv.y);
+          }
+        }}
+        onPointerMove={(event) => {
+          hover.current.mode = "inside";
+          if (event.uv) {
+            hover.current.uv.set(event.uv.x, event.uv.y);
+          }
+        }}
+        onPointerOut={() => {
+          hover.current.mode = "idle";
+        }}
+        onClick={(event) => {
+          event.stopPropagation();
+          onClick?.();
+        }}
+      >
+        <icosahedronBufferGeometry args={[2, 20]} />
+        <shaderMaterial
+          vertexShader={vertexShader}
+          fragmentShader={fragmentShader}
+          uniforms={uniforms.current}
+          transparent
+          depthWrite={false}
+          side={DoubleSide}
+        />
+      </mesh>
+    </group>
   );
 };
 
