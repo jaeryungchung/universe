@@ -16,10 +16,14 @@ const Blob = ({
   burstColor = "#f2efe7",
   bounceSignal = 0,
   quakeSignal = 0,
+  disintegrateSignal = 0,
+  onDisintegrateComplete,
+  isGone = false,
 }) => {
   const root = useRef();
   const mesh = useRef();
   const burstGroup = useRef();
+  const dustGroup = useRef();
   const burstProgress = useRef(1);
   const burstColorRef = useRef(new Color(burstColor));
   const bounceProgress = useRef(1.2);
@@ -31,6 +35,8 @@ const Blob = ({
   const worldPosition = useRef(new Vector3());
   const screenCenter = useRef(new Vector3());
   const pointerPx = useRef(new Vector2());
+  const disintegrateProgress = useRef(1.2);
+  const disintegrateDone = useRef(0);
   const uniforms = useRef({
     u_time: { value: 0 },
     u_intensity: { value: 0.18 },
@@ -42,6 +48,7 @@ const Blob = ({
     u_rippleRadius: { value: 0.18 },
     u_tintColor: { value: new Color(tint) },
     u_tintStrength: { value: 0.0 },
+    u_alpha: { value: 1.0 },
   });
 
   useEffect(() => {
@@ -61,6 +68,15 @@ const Blob = ({
     quakeProgress.current = 0;
   }, [quakeSignal]);
 
+  useEffect(() => {
+    if (!disintegrateSignal) {
+      return;
+    }
+
+    disintegrateProgress.current = 0;
+    disintegrateDone.current = 0;
+  }, [disintegrateSignal]);
+
   const burstSeeds = useMemo(
     () =>
       Array.from({ length: BURST_COUNT }, (_, index) => {
@@ -71,6 +87,27 @@ const Blob = ({
           speed: 0.62 + (index % 4) * 0.15,
           size: 0.02 + (index % 3) * 0.012,
           z: -0.7 - (index % 4) * 0.08,
+        };
+      }),
+    []
+  );
+
+  const dustSeeds = useMemo(
+    () =>
+      Array.from({ length: 180 }, (_, index) => {
+        const theta = Math.acos(1 - 2 * ((index + 0.5) / 180));
+        const phi = Math.PI * (1 + Math.sqrt(5)) * index;
+        const dir = new Vector3(
+          Math.sin(theta) * Math.cos(phi),
+          Math.sin(theta) * Math.sin(phi),
+          Math.cos(theta)
+        ).normalize();
+        return {
+          dir,
+          speed: 0.8 + (index % 9) * 0.07,
+          swirl: 0.08 + (index % 5) * 0.025,
+          delay: (index % 11) * 0.012,
+          size: 0.016 + (index % 4) * 0.006,
         };
       }),
     []
@@ -98,7 +135,10 @@ const Blob = ({
       pointerPx.current.y - centerPxY
     );
 
-    if (externalHover?.active) {
+    if (isGone || disintegrateProgress.current <= 1) {
+      hover.current.mode = "idle";
+      onHoverChange?.(false);
+    } else if (externalHover?.active) {
       hover.current.mode = "inside";
       hover.current.uv.set(
         externalHover.x * 0.5 + 0.5,
@@ -170,13 +210,29 @@ const Blob = ({
     const quakeX = quakeFade * Math.sin(quakeT * 42) * 0.08;
     const quakeY = quakeFade * Math.cos(quakeT * 34) * 0.06;
 
+    const disintegrateT = Math.min(1.2, disintegrateProgress.current);
+    const disintegrating = disintegrateT <= 1;
+    const dissolve = disintegrating ? 1 - Math.pow(disintegrateT, 1.35) : 1;
+    materialUniforms.u_alpha.value = isGone ? 0 : dissolve;
+
     if (root.current) {
-      root.current.scale.setScalar(1 + bounceWave);
-      root.current.position.set(quakeX, quakeY, 0);
+      const rootScale =
+        (1 + bounceWave) *
+        (disintegrating ? 1 + Math.sin(disintegrateT * Math.PI) * 0.08 : 1);
+      root.current.scale.setScalar(isGone ? 0.001 : rootScale);
+      root.current.position.set(
+        quakeX,
+        quakeY + (disintegrating ? disintegrateT * 0.12 : 0),
+        0
+      );
     }
 
     bounceProgress.current = Math.min(1.2, bounceProgress.current + delta * 2.35);
     quakeProgress.current = Math.min(1.2, quakeProgress.current + delta * 1.8);
+    disintegrateProgress.current = Math.min(
+      1.2,
+      disintegrateProgress.current + delta * 0.9
+    );
 
     if (burstGroup.current) {
       burstProgress.current = Math.min(1.2, burstProgress.current + delta * 1.9);
@@ -197,6 +253,30 @@ const Blob = ({
         child.material.color.copy(burstColorRef.current);
       });
     }
+
+    if (dustGroup.current) {
+      dustGroup.current.visible = !isGone && disintegrating;
+      dustGroup.current.children.forEach((child, index) => {
+        const seed = dustSeeds[index];
+        const delayed = Math.max(0, disintegrateT - seed.delay);
+        const progress = Math.min(1, delayed / (1 - seed.delay + 0.0001));
+        const eased = 1 - Math.pow(1 - progress, 2.6);
+        const distance = eased * (1.3 + seed.speed);
+        child.position.set(
+          seed.dir.x * distance + Math.sin(progress * 9 + index) * seed.swirl,
+          seed.dir.y * distance + Math.cos(progress * 8 + index) * seed.swirl,
+          seed.dir.z * distance * 0.5
+        );
+        child.scale.setScalar(seed.size * (1.4 - eased * 0.78));
+        child.material.opacity = Math.max(0, 0.9 - eased * 0.9);
+        child.material.color.copy(tintColor.current).lerp(new Color("#ffffff"), 0.42);
+      });
+    }
+
+    if (disintegrating && disintegrateT >= 1 && !disintegrateDone.current) {
+      disintegrateDone.current = 1;
+      onDisintegrateComplete?.();
+    }
   });
 
   return (
@@ -205,6 +285,15 @@ const Blob = ({
         {burstSeeds.map((seed, index) => (
           <mesh key={index} position={[0, 0, seed.z]}>
             <sphereGeometry args={[1, 6, 6]} />
+            <meshBasicMaterial transparent depthWrite={false} opacity={0} />
+          </mesh>
+        ))}
+      </group>
+
+      <group ref={dustGroup} visible={false}>
+        {dustSeeds.map((seed, index) => (
+          <mesh key={`dust-${index}`} position={[0, 0, 0]}>
+            <sphereGeometry args={[1, 4, 4]} />
             <meshBasicMaterial transparent depthWrite={false} opacity={0} />
           </mesh>
         ))}
@@ -234,6 +323,9 @@ const Blob = ({
         }}
         onClick={(event) => {
           event.stopPropagation();
+          if (isGone || disintegrateProgress.current <= 1) {
+            return;
+          }
           onClick?.();
         }}
       >

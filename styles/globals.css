@@ -256,6 +256,33 @@ canvas {
   pointer-events: none;
 }
 
+.endingMessage {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 18px 28px;
+  border: 1px solid rgba(194, 224, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(8, 12, 24, 0.72);
+  color: #f5f8ff;
+  font-family: "Nanum Pen Script", "Marker Felt", cursive;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  backdrop-filter: blur(16px);
+  box-shadow:
+    0 0 24px rgba(181, 217, 255, 0.12),
+    0 18px 42px rgba(0, 0, 0, 0.28);
+  z-index: 80;
+  animation: endingMessageAppear 0.8s cubic-bezier(0.2, 0.72, 0.2, 1) forwards;
+}
+
+.endingMessage:hover {
+  transform: translate(-50%, -50%) scale(1.03);
+}
+
 .floatingInput {
   position: fixed;
   width: 196px;
@@ -737,6 +764,17 @@ canvas {
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes endingMessageAppear {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 14px)) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 

@@ -7,6 +7,7 @@ uniform float u_rippleStrength;
 uniform float u_rippleRadius;
 uniform vec3 u_tintColor;
 uniform float u_tintStrength;
+uniform float u_alpha;
 
 varying vec2 vUv;
 varying float vDisplacement;
@@ -33,7 +34,7 @@ void main() {
     color += vec3(0.12, 0.15, 0.18) * rippleGlow;
 
     float alpha = 0.28 + fresnel * 0.08 + innerGlow * 0.06 + rippleGlow * 0.05;
-    gl_FragColor = vec4(color, alpha);
+    gl_FragColor = vec4(color, alpha * u_alpha);
 }
 
 `;

@@ -33,6 +33,8 @@ const BLOB_BASE_TINT = "#f2efe7";
 const FADE_STEPS = [0, 0.45, 0.72, 1];
 const SHOCK_TEXT_LENGTH = 15;
 const ENCOURAGEMENT_TRIGGER = 10;
+const ENCOURAGEMENT_BLOB_END_COUNT = 4;
+const HAND_BLOB_DISSOLVE_TARGET = 7;
 const BLOB_DECAY_MS = 60000;
 
 function clampNotePosition(x, y, width, height) {
@@ -173,6 +175,50 @@ function doesNoteOverlapBlob(x, y, radius) {
   return Math.hypot(closestX - centerX, closestY - centerY) <= radius;
 }
 
+function getDistance2D(a, b) {
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+function isHandFingerExtended(landmarks, tipId, pipId, ratio = 1.1) {
+  const wrist = landmarks[0];
+  return getDistance2D(landmarks[tipId], wrist) >
+    getDistance2D(landmarks[pipId], wrist) * ratio;
+}
+
+function isHandThumbExtended(landmarks) {
+  const wrist = landmarks[0];
+  const thumbTip = landmarks[4];
+  const thumbIp = landmarks[3];
+  const thumbMcp = landmarks[2];
+  const indexMcp = landmarks[5];
+
+  return (
+    getDistance2D(thumbTip, indexMcp) >
+      getDistance2D(thumbIp, indexMcp) * 1.02 &&
+    getDistance2D(thumbTip, wrist) > getDistance2D(thumbMcp, wrist) * 1.22
+  );
+}
+
+function classifyHandGesture(landmarks) {
+  const extendedCount = [
+    isHandThumbExtended(landmarks),
+    isHandFingerExtended(landmarks, 8, 6),
+    isHandFingerExtended(landmarks, 12, 10),
+    isHandFingerExtended(landmarks, 16, 14),
+    isHandFingerExtended(landmarks, 20, 18),
+  ].filter(Boolean).length;
+
+  if (extendedCount >= 4) {
+    return "Open_Palm";
+  }
+
+  if (extendedCount <= 2) {
+    return "Closed_Fist";
+  }
+
+  return "Unknown";
+}
+
 export default function Home({ encouragementLines, tutorialLines }) {
   const textareaRef = useRef(null);
   const audioRef = useRef(null);
@@ -193,6 +239,10 @@ export default function Home({ encouragementLines, tutorialLines }) {
   const handTriggeredNoteIdRef = useRef(null);
   const mouseDraggingNoteIdRef = useRef(null);
   const absorbNoteRef = useRef(null);
+  const handBlobGestureStageRef = useRef("idle");
+  const handBlobGestureCountRef = useRef(0);
+  const blobEndStateRef = useRef("idle");
+  const triggerBlobEndingRef = useRef(null);
   const handleNoteDropRef = useRef(null);
   const [draft, setDraft] = useState(null);
   const [notes, setNotes] = useState([]);
@@ -214,6 +264,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
     tint: BLOB_BASE_TINT,
   });
   const [blobClickStreak, setBlobClickStreak] = useState(0);
+  const [encouragementCount, setEncouragementCount] = useState(0);
   const [encouragementBubble, setEncouragementBubble] = useState(null);
   const [encouragementPointer, setEncouragementPointer] = useState({
     x: 0,
@@ -233,6 +284,8 @@ export default function Home({ encouragementLines, tutorialLines }) {
   const [hasStartedAudio, setHasStartedAudio] = useState(false);
   const [webcamEnabled, setWebcamEnabled] = useState(false);
   const [webcamPermission, setWebcamPermission] = useState("idle");
+  const [blobEndState, setBlobEndState] = useState("idle");
+  const [blobDisintegrateSignal, setBlobDisintegrateSignal] = useState(0);
   const [handScreenState, setHandScreenState] = useState(null);
   const [handPointerState, setHandPointerState] = useState({
     active: false,
@@ -250,6 +303,28 @@ export default function Home({ encouragementLines, tutorialLines }) {
   );
 
   const tutorialText = tutorialLines.join(" ");
+
+  const triggerBlobEnding = () => {
+    if (blobEndState !== "idle") {
+      return;
+    }
+
+    handBlobGestureStageRef.current = "idle";
+    handBlobGestureCountRef.current = 0;
+    handTriggeredNoteIdRef.current = null;
+    setEncouragementCount(0);
+    setBlobClickStreak(0);
+    setBlobEndState("disintegrating");
+    setEncouragementBubble(null);
+    setBlobHoverCursor(false);
+    setBlobDisintegrateSignal((current) => current + 1);
+  };
+
+  useEffect(() => {
+    blobEndStateRef.current = blobEndState;
+  }, [blobEndState]);
+
+  triggerBlobEndingRef.current = triggerBlobEnding;
 
   useEffect(() => {
     notesRef.current = notes;
@@ -449,6 +524,8 @@ export default function Home({ encouragementLines, tutorialLines }) {
     handSendingRef.current = false;
     handLastVideoTimeRef.current = -1;
     handTriggeredNoteIdRef.current = null;
+    handBlobGestureStageRef.current = "idle";
+    handBlobGestureCountRef.current = 0;
     setHandScreenState(null);
     setHandPointerState((current) => ({ ...current, active: false, overBlob: false }));
     setSelectedHandNoteId(null);
@@ -569,6 +646,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
 
           if (!landmarks) {
             handTriggeredNoteIdRef.current = null;
+            handBlobGestureStageRef.current = "idle";
             setHandScreenState(null);
             setHandPointerState((current) => ({
               ...current,
@@ -591,6 +669,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
           const pointerY = palmCenter.y * height;
           const normalizedX = palmCenter.x * 2 - 1;
           const normalizedY = -(palmCenter.y * 2 - 1);
+          const gesture = classifyHandGesture(landmarks);
           const uiBlocked =
             pointerY > height - 120 &&
             (pointerX < 220 || pointerX > width - 340);
@@ -607,6 +686,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
             normalizedX,
             normalizedY,
             overBlob,
+            gesture,
           };
 
           setHandScreenState(handState);
@@ -624,7 +704,31 @@ export default function Home({ encouragementLines, tutorialLines }) {
             return;
           }
 
-          if (!uiBlocked) {
+          if (blobEndStateRef.current === "idle" && overBlob) {
+            if (gesture === "Closed_Fist") {
+              if (handBlobGestureStageRef.current === "open") {
+                handBlobGestureStageRef.current = "fist";
+              } else if (handBlobGestureStageRef.current === "idle") {
+                handBlobGestureStageRef.current = "fist";
+              }
+            } else if (gesture === "Open_Palm") {
+              if (handBlobGestureStageRef.current === "fist") {
+                handBlobGestureCountRef.current += 1;
+                handBlobGestureStageRef.current = "open";
+                if (
+                  handBlobGestureCountRef.current >= HAND_BLOB_DISSOLVE_TARGET
+                ) {
+                  triggerBlobEndingRef.current?.();
+                }
+              } else {
+                handBlobGestureStageRef.current = "open";
+              }
+            }
+          } else if (!overBlob) {
+            handBlobGestureStageRef.current = "idle";
+          }
+
+          if (!uiBlocked && blobEndStateRef.current === "idle") {
             const selectedByFingertips = notesRef.current.find(
               (note) => countFingertipsInsideNote(points, note) >= 4
             );
@@ -739,6 +843,10 @@ export default function Home({ encouragementLines, tutorialLines }) {
   };
 
   const startDraftAtPoint = (clientX, clientY) => {
+    if (blobEndState !== "idle") {
+      return;
+    }
+
     if (selectedHandNoteIdRef.current) {
       setSelectedHandNoteId(null);
       resetBlobClickStreak();
@@ -867,21 +975,31 @@ export default function Home({ encouragementLines, tutorialLines }) {
   };
 
   const handleBlobClick = () => {
+    if (blobEndState !== "idle") {
+      return;
+    }
+
     attemptPlayAudio();
 
     const nextStreak = blobClickStreak + 1;
     setBlobClickStreak(nextStreak);
 
     if (nextStreak >= ENCOURAGEMENT_TRIGGER && encouragementLines.length > 0) {
-      const randomLine =
-        encouragementLines[
-          Math.floor(Math.random() * encouragementLines.length)
-        ];
-      setEncouragementBubble({
-        id: `enc-${Date.now()}`,
-        text: randomLine,
-      });
-      setEncouragementPointer(latestPointerRef.current);
+      if (encouragementCount + 1 >= ENCOURAGEMENT_BLOB_END_COUNT) {
+        setEncouragementCount(0);
+        triggerBlobEnding();
+      } else {
+        const randomLine =
+          encouragementLines[
+            Math.floor(Math.random() * encouragementLines.length)
+          ];
+        setEncouragementBubble({
+          id: `enc-${Date.now()}`,
+          text: randomLine,
+        });
+        setEncouragementPointer(latestPointerRef.current);
+        setEncouragementCount((current) => current + 1);
+      }
       setBlobClickStreak(0);
     }
 
@@ -980,6 +1098,13 @@ export default function Home({ encouragementLines, tutorialLines }) {
           tint={blobState.tint}
           absorbRadius={ABSORB_RADIUS}
           onClick={handleBlobClick}
+          disintegrateSignal={blobDisintegrateSignal}
+          isGone={blobEndState === "gone"}
+          onDisintegrateComplete={() => {
+            setBlobEndState("gone");
+            setEncouragementBubble(null);
+            setDraft(null);
+          }}
           onHoverChange={(isHovering) => {
             setBlobHoverCursor(isHovering);
             if (isHovering) {
@@ -1041,6 +1166,15 @@ export default function Home({ encouragementLines, tutorialLines }) {
         >
           {encouragementBubble.text}
         </div>
+      ) : null}
+      {blobEndState === "gone" ? (
+        <button
+          type="button"
+          className="endingMessage"
+          onClick={() => window.location.reload()}
+        >
+          당신의 하루를 응원합니다
+        </button>
       ) : null}
 
       {draft ? (
