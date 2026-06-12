@@ -28,6 +28,7 @@ const TRACKS = [
 const INPUT_WIDTH = 196;
 const INPUT_HEIGHT = 138;
 const ABSORB_RADIUS = 172;
+const HAND_ABSORB_RADIUS = ABSORB_RADIUS + 108;
 const BLOB_BASE_TINT = "#f2efe7";
 const FADE_STEPS = [0, 0.45, 0.72, 1];
 const SHOCK_TEXT_LENGTH = 15;
@@ -97,14 +98,102 @@ function createBurstParticles(color, count, minRadius, maxRadius) {
   });
 }
 
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === "true") {
+        resolve();
+      } else {
+        existing.addEventListener("load", resolve, { once: true });
+        existing.addEventListener("error", reject, { once: true });
+      }
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.dataset.src = src;
+    script.addEventListener("load", () => {
+      script.dataset.loaded = "true";
+      resolve();
+    });
+    script.addEventListener("error", reject, { once: true });
+    document.head.appendChild(script);
+  });
+}
+
+function getPalmCenter(landmarks) {
+  const palmIds = [0, 5, 9, 13, 17];
+  const sum = palmIds.reduce(
+    (accumulator, index) => ({
+      x: accumulator.x + landmarks[index].x,
+      y: accumulator.y + landmarks[index].y,
+      z: accumulator.z + landmarks[index].z,
+    }),
+    { x: 0, y: 0, z: 0 }
+  );
+
+  return {
+    x: sum.x / palmIds.length,
+    y: sum.y / palmIds.length,
+    z: sum.z / palmIds.length,
+  };
+}
+
+function countFingertipsInsideNote(points, note) {
+  const tipIds = [4, 8, 12, 16, 20];
+
+  return tipIds.reduce((count, tipId) => {
+    const point = points[tipId];
+    if (!point) {
+      return count;
+    }
+
+    return point.x >= note.x &&
+      point.x <= note.x + INPUT_WIDTH &&
+      point.y >= note.y &&
+      point.y <= note.y + INPUT_HEIGHT
+      ? count + 1
+      : count;
+  }, 0);
+}
+
+function doesNoteOverlapBlob(x, y, radius) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const centerX = window.innerWidth / 2;
+  const centerY = window.innerHeight / 2;
+  const closestX = clamp(centerX, x, x + INPUT_WIDTH);
+  const closestY = clamp(centerY, y, y + INPUT_HEIGHT);
+
+  return Math.hypot(closestX - centerX, closestY - centerY) <= radius;
+}
+
 export default function Home({ encouragementLines, tutorialLines }) {
   const textareaRef = useRef(null);
   const audioRef = useRef(null);
   const playerRef = useRef(null);
+  const videoRef = useRef(null);
+  const handCanvasRef = useRef(null);
   const playerCloseTimeoutRef = useRef(null);
   const latestPointerRef = useRef({ x: 0, y: 0, t: 0 });
   const blobCursorPatTimeoutRef = useRef(null);
   const lastNoteColorRef = useRef(null);
+  const webcamStreamRef = useRef(null);
+  const handTrackerRef = useRef(null);
+  const handLoopRef = useRef(null);
+  const handSendingRef = useRef(false);
+  const handLastVideoTimeRef = useRef(-1);
+  const notesRef = useRef([]);
+  const selectedHandNoteIdRef = useRef(null);
+  const handTriggeredNoteIdRef = useRef(null);
+  const mouseDraggingNoteIdRef = useRef(null);
+  const absorbNoteRef = useRef(null);
+  const handleNoteDropRef = useRef(null);
   const [draft, setDraft] = useState(null);
   const [notes, setNotes] = useState([]);
   const [absorbingNotes, setAbsorbingNotes] = useState([]);
@@ -142,6 +231,18 @@ export default function Home({ encouragementLines, tutorialLines }) {
   const [isTrackMenuOpen, setIsTrackMenuOpen] = useState(false);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   const [hasStartedAudio, setHasStartedAudio] = useState(false);
+  const [webcamEnabled, setWebcamEnabled] = useState(false);
+  const [webcamPermission, setWebcamPermission] = useState("idle");
+  const [handScreenState, setHandScreenState] = useState(null);
+  const [handPointerState, setHandPointerState] = useState({
+    active: false,
+    x: 0,
+    y: 0,
+    normalizedX: 0,
+    normalizedY: 0,
+    overBlob: false,
+  });
+  const [selectedHandNoteId, setSelectedHandNoteId] = useState(null);
 
   const activeTrack = useMemo(
     () => TRACKS.find((track) => track.id === activeTrackId) || TRACKS[0],
@@ -149,6 +250,14 @@ export default function Home({ encouragementLines, tutorialLines }) {
   );
 
   const tutorialText = tutorialLines.join(" ");
+
+  useEffect(() => {
+    notesRef.current = notes;
+  }, [notes]);
+
+  useEffect(() => {
+    selectedHandNoteIdRef.current = selectedHandNoteId;
+  }, [selectedHandNoteId]);
 
   useEffect(() => {
     if (draft && textareaRef.current) {
@@ -321,6 +430,263 @@ export default function Home({ encouragementLines, tutorialLines }) {
     setHasStartedAudio(true);
   };
 
+  const stopWebcamTracking = () => {
+    if (handLoopRef.current) {
+      window.cancelAnimationFrame(handLoopRef.current);
+      handLoopRef.current = null;
+    }
+
+    if (webcamStreamRef.current) {
+      webcamStreamRef.current.getTracks().forEach((track) => track.stop());
+      webcamStreamRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+
+    handTrackerRef.current = null;
+    handSendingRef.current = false;
+    handLastVideoTimeRef.current = -1;
+    handTriggeredNoteIdRef.current = null;
+    setHandScreenState(null);
+    setHandPointerState((current) => ({ ...current, active: false, overBlob: false }));
+    setSelectedHandNoteId(null);
+
+    const canvas = handCanvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (canvas && context) {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  const drawHandOverlay = (handState) => {
+    const canvas = handCanvasRef.current;
+    if (!canvas) {
+      return;
+    }
+
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return;
+    }
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+
+    context.clearRect(0, 0, width, height);
+
+    if (!handState) {
+      return;
+    }
+
+    const connections = [
+      [0, 1], [1, 2], [2, 3], [3, 4],
+      [0, 5], [5, 6], [6, 7], [7, 8],
+      [5, 9], [9, 10], [10, 11], [11, 12],
+      [9, 13], [13, 14], [14, 15], [15, 16],
+      [13, 17], [17, 18], [18, 19], [19, 20],
+      [0, 17],
+    ];
+
+    context.save();
+    context.strokeStyle = "rgba(171, 223, 255, 0.55)";
+    context.lineWidth = 1.35;
+    context.shadowBlur = 16;
+    context.shadowColor = "rgba(148, 208, 255, 0.35)";
+
+    connections.forEach(([start, end]) => {
+      const a = handState.points[start];
+      const b = handState.points[end];
+      context.beginPath();
+      context.moveTo(a.x, a.y);
+      context.lineTo(b.x, b.y);
+      context.stroke();
+    });
+
+    handState.points.forEach((point, index) => {
+      context.beginPath();
+      context.fillStyle =
+        index === 8 || index === 12
+          ? "rgba(255, 246, 200, 0.95)"
+          : "rgba(196, 231, 255, 0.9)";
+      context.arc(point.x, point.y, index === 0 ? 5 : 3.1, 0, Math.PI * 2);
+      context.fill();
+    });
+
+    context.restore();
+  };
+
+  useEffect(() => {
+    if (!webcamEnabled) {
+      stopWebcamTracking();
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const runHandTracking = async () => {
+      try {
+        setWebcamPermission("pending");
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: 960, height: 540 },
+          audio: false,
+        });
+
+        if (isCancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        webcamStreamRef.current = stream;
+        setWebcamPermission("granted");
+
+        await loadScriptOnce("https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js");
+
+        if (isCancelled || !window.Hands || !videoRef.current) {
+          return;
+        }
+
+        const hands = new window.Hands({
+          locateFile: (file) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+        });
+
+        hands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.6,
+          minTrackingConfidence: 0.55,
+          selfieMode: true,
+        });
+
+        hands.onResults((results) => {
+          const landmarks = results.multiHandLandmarks?.[0];
+
+          if (!landmarks) {
+            handTriggeredNoteIdRef.current = null;
+            setHandScreenState(null);
+            setHandPointerState((current) => ({
+              ...current,
+              active: false,
+              overBlob: false,
+            }));
+            drawHandOverlay(null);
+            return;
+          }
+
+          const width = window.innerWidth;
+          const height = window.innerHeight;
+          const points = landmarks.map((landmark) => ({
+            x: landmark.x * width,
+            y: landmark.y * height,
+            z: landmark.z,
+          }));
+          const palmCenter = getPalmCenter(landmarks);
+          const pointerX = palmCenter.x * width;
+          const pointerY = palmCenter.y * height;
+          const normalizedX = palmCenter.x * 2 - 1;
+          const normalizedY = -(palmCenter.y * 2 - 1);
+          const uiBlocked =
+            pointerY > height - 120 &&
+            (pointerX < 220 || pointerX > width - 340);
+          const distanceToBlob = Math.hypot(
+            pointerX - width / 2,
+            pointerY - height / 2
+          );
+          const overBlob = !uiBlocked && distanceToBlob <= HAND_ABSORB_RADIUS;
+
+          const handState = {
+            points,
+            pointerX,
+            pointerY,
+            normalizedX,
+            normalizedY,
+            overBlob,
+          };
+
+          setHandScreenState(handState);
+          setHandPointerState({
+            active: !uiBlocked,
+            x: pointerX,
+            y: pointerY,
+            normalizedX,
+            normalizedY,
+            overBlob,
+          });
+          drawHandOverlay(handState);
+
+          if (mouseDraggingNoteIdRef.current) {
+            return;
+          }
+
+          if (!uiBlocked) {
+            const selectedByFingertips = notesRef.current.find(
+              (note) => countFingertipsInsideNote(points, note) >= 4
+            );
+
+            if (selectedByFingertips) {
+              if (handTriggeredNoteIdRef.current !== selectedByFingertips.id) {
+                handTriggeredNoteIdRef.current = selectedByFingertips.id;
+                setSelectedHandNoteId(selectedByFingertips.id);
+                absorbNoteRef.current?.(selectedByFingertips);
+                window.setTimeout(() => {
+                  setSelectedHandNoteId((current) =>
+                    current === selectedByFingertips.id ? null : current
+                  );
+                }, 0);
+              }
+            } else {
+              handTriggeredNoteIdRef.current = null;
+            }
+          }
+        });
+
+        handTrackerRef.current = hands;
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+
+        const loop = async () => {
+          if (
+            !videoRef.current ||
+            !handTrackerRef.current ||
+            handSendingRef.current ||
+            videoRef.current.readyState < 2
+          ) {
+            handLoopRef.current = window.requestAnimationFrame(loop);
+            return;
+          }
+
+          if (handLastVideoTimeRef.current !== videoRef.current.currentTime) {
+            handSendingRef.current = true;
+            handLastVideoTimeRef.current = videoRef.current.currentTime;
+            await handTrackerRef.current.send({ image: videoRef.current });
+            handSendingRef.current = false;
+          }
+
+          handLoopRef.current = window.requestAnimationFrame(loop);
+        };
+
+        handLoopRef.current = window.requestAnimationFrame(loop);
+      } catch (error) {
+        setWebcamPermission("denied");
+        setWebcamEnabled(false);
+        stopWebcamTracking();
+      }
+    };
+
+    runHandTracking();
+
+    return () => {
+      isCancelled = true;
+      stopWebcamTracking();
+    };
+  }, [webcamEnabled]);
+
   const schedulePlayerClose = () => {
     if (playerCloseTimeoutRef.current) {
       window.clearTimeout(playerCloseTimeoutRef.current);
@@ -373,6 +739,12 @@ export default function Home({ encouragementLines, tutorialLines }) {
   };
 
   const startDraftAtPoint = (clientX, clientY) => {
+    if (selectedHandNoteIdRef.current) {
+      setSelectedHandNoteId(null);
+      resetBlobClickStreak();
+      return;
+    }
+
     const x = clientX - INPUT_WIDTH / 2;
     const y = clientY - INPUT_HEIGHT / 2;
     const clamped = clampNotePosition(x, y, INPUT_WIDTH, INPUT_HEIGHT);
@@ -539,15 +911,8 @@ export default function Home({ encouragementLines, tutorialLines }) {
     }
   };
 
-  const handleNoteDrop = ({ id, x, y }) => {
-    const centerX = window.innerWidth / 2;
-    const centerY = window.innerHeight / 2;
-
+  const handleNoteDrop = ({ id, x, y, absorbRadius = ABSORB_RADIUS }) => {
     const updated = clampNotePosition(x, y, INPUT_WIDTH, INPUT_HEIGHT);
-    const noteCenterX = updated.x + INPUT_WIDTH / 2;
-    const noteCenterY = updated.y + INPUT_HEIGHT / 2;
-    const distance = Math.hypot(noteCenterX - centerX, noteCenterY - centerY);
-
     let noteToAbsorb = null;
 
     setNotes((current) =>
@@ -562,7 +927,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
           y: updated.y,
         };
 
-        if (distance <= ABSORB_RADIUS) {
+        if (doesNoteOverlapBlob(updated.x, updated.y, absorbRadius)) {
           noteToAbsorb = nextNote;
         }
 
@@ -585,12 +950,18 @@ export default function Home({ encouragementLines, tutorialLines }) {
     }, 0);
   };
 
+  absorbNoteRef.current = absorbNote;
+  handleNoteDropRef.current = handleNoteDrop;
+
   return (
     <div
       className={`container${cosmicShock ? " cosmicShockActive" : ""}${
         encouragementBubble ? " heartCursor" : ""
       }${blobHoverCursor ? " blobHoverCursor" : ""}`}
     >
+      <video ref={videoRef} className="handVideo" playsInline muted />
+      <canvas ref={handCanvasRef} className="handOverlay" aria-hidden="true" />
+
       <audio
         ref={audioRef}
         src={activeTrack.src}
@@ -615,6 +986,15 @@ export default function Home({ encouragementLines, tutorialLines }) {
               setBlobCursorPointer(latestPointerRef.current);
             }
           }}
+          externalHover={
+            handPointerState.active && handPointerState.overBlob
+              ? {
+                  active: true,
+                  x: handPointerState.normalizedX,
+                  y: handPointerState.normalizedY,
+                }
+              : null
+          }
           burstSignal={blobBurst.key}
           burstColor={blobBurst.color}
           bounceSignal={blobMotion.bounceKey}
@@ -691,6 +1071,14 @@ export default function Home({ encouragementLines, tutorialLines }) {
         <StickyNote
           key={note.id}
           {...note}
+          isSelected={note.id === selectedHandNoteId}
+          onDragStart={(id) => {
+            mouseDraggingNoteIdRef.current = id;
+            setSelectedHandNoteId(null);
+          }}
+          onDragEnd={() => {
+            mouseDraggingNoteIdRef.current = null;
+          }}
           onDrop={handleNoteDrop}
           onRemove={(id) => {
             setNotes((current) => current.filter((noteItem) => noteItem.id !== id));
@@ -763,11 +1151,27 @@ export default function Home({ encouragementLines, tutorialLines }) {
         ))}
       </div>
 
-      <div className="helpDock">
-        <button type="button" className="helpButton" aria-label="Help">
-          ?
+      <div className="leftDock">
+        <div className="helpDock">
+          <button type="button" className="helpButton" aria-label="Help">
+            ?
+          </button>
+          <div className="helpTooltip">{tutorialText}</div>
+        </div>
+        <button
+          type="button"
+          className={`cameraButton${webcamEnabled ? " cameraButtonActive" : ""}`}
+          aria-label="Toggle hand camera"
+          onClick={() => {
+            if (webcamEnabled) {
+              setWebcamEnabled(false);
+            } else {
+              setWebcamEnabled(true);
+            }
+          }}
+        >
+          📷
         </button>
-        <div className="helpTooltip">{tutorialText}</div>
       </div>
 
       <div

@@ -24,6 +24,13 @@
   box-shadow: 0 24px 42px rgba(36, 27, 20, 0.24);
 }
 
+.selected {
+  box-shadow:
+    0 0 0 2px rgba(245, 249, 255, 0.34),
+    0 0 24px rgba(173, 222, 255, 0.42),
+    0 18px 38px rgba(36, 27, 20, 0.24);
+}
+
 .pink {
   background: #f7b7cb;
   color: #734257;

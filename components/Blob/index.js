@@ -11,6 +11,7 @@ const Blob = ({
   absorbRadius = 112,
   onClick,
   onHoverChange,
+  externalHover,
   burstSignal = 0,
   burstColor = "#f2efe7",
   bounceSignal = 0,
@@ -97,7 +98,13 @@ const Blob = ({
       pointerPx.current.y - centerPxY
     );
 
-    if (hover.current.mode !== "inside") {
+    if (externalHover?.active) {
+      hover.current.mode = "inside";
+      hover.current.uv.set(
+        externalHover.x * 0.5 + 0.5,
+        1.0 - (externalHover.y * 0.5 + 0.5)
+      );
+    } else if (hover.current.mode !== "inside") {
       if (pointerDistance <= absorbRadius * 0.55) {
         hover.current.mode = "near";
         hover.current.uv.set(pointer.x * 0.5 + 0.5, 1 - (pointer.y * 0.5 + 0.5));

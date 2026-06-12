@@ -1,7 +1,18 @@
 import React, { useEffect, useRef, useState } from "react";
 import styles from "./StickyNote.module.css";
 
-const StickyNote = ({ id, x, y, text, color, onDrop, onRemove }) => {
+const StickyNote = ({
+  id,
+  x,
+  y,
+  text,
+  color,
+  isSelected,
+  onDrop,
+  onRemove,
+  onDragStart,
+  onDragEnd,
+}) => {
   const noteRef = useRef(null);
   const dragState = useRef({ pointerId: null, offsetX: 0, offsetY: 0 });
   const [position, setPosition] = useState({ x, y });
@@ -29,6 +40,7 @@ const StickyNote = ({ id, x, y, text, color, onDrop, onRemove }) => {
 
     noteRef.current?.setPointerCapture(event.pointerId);
     setIsDragging(true);
+    onDragStart?.(id);
   };
 
   const handlePointerMove = (event) => {
@@ -55,6 +67,7 @@ const StickyNote = ({ id, x, y, text, color, onDrop, onRemove }) => {
     noteRef.current?.releasePointerCapture(event.pointerId);
     setIsDragging(false);
     setPosition(nextPosition);
+    onDragEnd?.(id);
     onDrop?.({
       id,
       x: nextPosition.x,
@@ -67,7 +80,7 @@ const StickyNote = ({ id, x, y, text, color, onDrop, onRemove }) => {
       ref={noteRef}
       className={`${styles.stickyNote} ${styles[color] || styles.pink} ${
         isDragging ? styles.dragging : ""
-      }`}
+      } ${isSelected ? styles.selected : ""}`}
       style={{
         left: position.x,
         top: position.y,
