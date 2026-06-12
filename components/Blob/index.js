@@ -37,6 +37,8 @@ const Blob = ({
     u_hoverStrength: { value: 0.0 },
     u_hoverActive: { value: 0.0 },
     u_hoverRadius: { value: 0.24 },
+    u_rippleStrength: { value: 0.0 },
+    u_rippleRadius: { value: 0.18 },
     u_tintColor: { value: new Color(tint) },
     u_tintStrength: { value: 0.0 },
   });
@@ -125,6 +127,13 @@ const Blob = ({
       hover.current.mode === "inside" ? 1 : hover.current.mode === "near" ? 0.68 : 0;
     materialUniforms.u_hoverRadius.value =
       hover.current.mode === "inside" ? 0.24 : hover.current.mode === "near" ? 0.16 : 0.24;
+    materialUniforms.u_rippleRadius.value =
+      hover.current.mode === "inside" ? 0.2 : hover.current.mode === "near" ? 0.16 : 0.2;
+    materialUniforms.u_rippleStrength.value = MathUtils.lerp(
+      materialUniforms.u_rippleStrength.value,
+      hover.current.mode === "inside" ? 1.0 : hover.current.mode === "near" ? 0.45 : 0.0,
+      hover.current.mode === "idle" ? 0.08 : 0.16
+    );
     materialUniforms.u_intensity.value = MathUtils.lerp(
       materialUniforms.u_intensity.value,
       hover.current.mode === "inside"

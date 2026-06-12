@@ -5,6 +5,8 @@ uniform vec2 u_hoverUv;
 uniform float u_hoverStrength;
 uniform float u_hoverActive;
 uniform float u_hoverRadius;
+uniform float u_rippleStrength;
+uniform float u_rippleRadius;
 
 varying vec2 vUv;
 varying float vDisplacement;
@@ -105,8 +107,11 @@ void main() {
     float hoverDistance = distance(vUv, u_hoverUv);
     float press = 1.0 - smoothstep(0.0, u_hoverRadius, hoverDistance);
     press = pow(press, 2.8) * u_hoverStrength * u_hoverActive;
+    float rippleMask = 1.0 - smoothstep(0.0, u_rippleRadius, hoverDistance);
+    float rippleWave = sin(hoverDistance * 42.0 - u_time * 7.5);
+    float ripple = rippleWave * rippleMask * rippleMask * u_rippleStrength * u_hoverActive * 0.09;
   
-    vec3 newPosition = position + normal * (u_intensity * vDisplacement - press * 0.52);
+    vec3 newPosition = position + normal * (u_intensity * vDisplacement - press * 0.52 + ripple);
     vNormal = normalize(normalMatrix * normal);
     vPosition = (modelMatrix * vec4(newPosition, 1.0)).xyz;
   
