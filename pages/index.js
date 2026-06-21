@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import Blob from "../components/Blob";
 import StickyNote from "../components/StickyNote";
+import MirrorMode from "../components/MirrorMode";
 import universeTrack from "../src/music/universe.mp3";
 import forestTrack from "../src/music/forest.mp3";
 import relaxTrack from "../src/music/relax.mp3";
@@ -296,6 +297,7 @@ export default function Home({ encouragementLines, tutorialLines }) {
     overBlob: false,
   });
   const [selectedHandNoteId, setSelectedHandNoteId] = useState(null);
+  const [isMirrorModeOpen, setIsMirrorModeOpen] = useState(false);
 
   const activeTrack = useMemo(
     () => TRACKS.find((track) => track.id === activeTrackId) || TRACKS[0],
@@ -1306,6 +1308,15 @@ export default function Home({ encouragementLines, tutorialLines }) {
         >
           📷
         </button>
+        <button
+          type="button"
+          className="talkButton"
+          aria-label="Deep conversation mirror"
+          onClick={() => setIsMirrorModeOpen(true)}
+          title="거울과의 깊은 대화"
+        >
+          💭
+        </button>
       </div>
 
       <div
@@ -1397,6 +1408,10 @@ export default function Home({ encouragementLines, tutorialLines }) {
           </div>
         </div>
       </div>
+
+      {isMirrorModeOpen && (
+        <MirrorMode onClose={() => setIsMirrorModeOpen(false)} />
+      )}
     </div>
   );
 }

@@ -1,0 +1,287 @@
+.mirrorModeOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+}
+
+.mirrorModeContainer {
+  position: relative;
+  width: 90vw;
+  height: 90vh;
+  max-width: 1200px;
+  max-height: 800px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.closeButton {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  z-index: 10001;
+}
+
+.closeButton:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.cameraContainer {
+  flex: 1;
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 350px;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.mirrorVideo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.mirrorCanvas {
+  display: none;
+}
+
+.mirrorOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.3) 100%
+  );
+  pointer-events: none;
+}
+
+.progressBar {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #a8e6cf, #56ccf2);
+  transition: width 0.4s ease;
+}
+
+.conversationPanel {
+  flex: 0 0 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow-y: auto;
+}
+
+.stageIndicator {
+  font-size: 12px;
+  color: #a8e6cf;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.mirrorQuestion {
+  font-size: 16px;
+  color: #f0f0f0;
+  line-height: 1.6;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.mirrorReflection {
+  background: linear-gradient(135deg, rgba(168, 230, 207, 0.1), rgba(86, 204, 242, 0.1));
+  border-left: 3px solid #a8e6cf;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #e0e0e0;
+  line-height: 1.5;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.mirrorReflection p {
+  margin: 0;
+}
+
+.inputSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.mirrorInput {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f0f0f0;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  max-height: 150px;
+  transition: all 0.3s ease;
+}
+
+.mirrorInput:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #a8e6cf;
+  box-shadow: 0 0 8px rgba(168, 230, 207, 0.2);
+}
+
+.mirrorInput::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.mirrorInput:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.submitButton {
+  background: linear-gradient(135deg, #a8e6cf, #56ccf2);
+  color: #1a1a2e;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.submitButton:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(168, 230, 207, 0.3);
+}
+
+.submitButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.prevButton {
+  background: rgba(255, 255, 255, 0.05);
+  color: #a8e6cf;
+  border: 1px solid rgba(168, 230, 207, 0.3);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.prevButton:hover {
+  background: rgba(168, 230, 207, 0.1);
+  border-color: #a8e6cf;
+}
+
+.completionMessage {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  padding: 12px;
+  background: rgba(168, 230, 207, 0.1);
+  border-radius: 8px;
+}
+
+.completionMessage p {
+  margin: 0;
+  color: #a8e6cf;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.finishButton {
+  background: linear-gradient(135deg, #a8e6cf, #56ccf2);
+  color: #1a1a2e;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.finishButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(168, 230, 207, 0.3);
+}
+
+.errorMessage {
+  background: rgba(255, 100, 100, 0.1);
+  border-left: 3px solid #ff6464;
+  color: #ff9999;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+@media (max-width: 1024px) {
+  .mirrorModeContainer {
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .cameraContainer {
+    min-width: unset;
+    height: 300px;
+  }
+
+  .conversationPanel {
+    flex: 0 0 auto;
+    max-height: 250px;
+  }
+}

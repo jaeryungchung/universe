@@ -383,6 +383,29 @@ canvas {
     0 12px 24px rgba(0, 0, 0, 0.24);
 }
 
+.talkButton {
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(168, 230, 207, 0.24);
+  border-radius: 999px;
+  background: rgba(10, 14, 26, 0.78);
+  color: #eef4ff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+  transition: all 0.3s ease;
+}
+
+.talkButton:hover {
+  border-color: rgba(168, 230, 207, 0.48);
+  box-shadow:
+    0 0 0 1px rgba(168, 230, 207, 0.18),
+    0 12px 24px rgba(0, 0, 0, 0.24);
+  transform: scale(1.05);
+}
+
 .musicDock {
   position: absolute;
   right: 24px;
